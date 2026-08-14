@@ -54,6 +54,8 @@ dsh --profile demo
 
 ## Git 约定
 
-- 提交信息采用 Conventional Commits,例如 `feat(plugins): add kino-<name> plugin`。
+- **所有提交遵循 Conventional Commits**:首行(标题)用简单英文,格式 `<type>(<scope>): <描述>`,例如 `feat(plugins): add kino-<name> plugin`。
+- **正文(story)中英对照**:需要解释"为什么改"时,正文先写英文一段,再写内容对应的中文一段;语言通俗,不用内部黑话和缩写。
+- 常用 type:`feat`(新功能)、`fix`(修 bug)、`docs`(文档)、`refactor`(重构)、`chore`(杂项维护)。
 - 组合文件中不得写入密钥、凭据;机密一律走环境变量或宿主侧配置。
 - 推送远端前检查 `git status`。
