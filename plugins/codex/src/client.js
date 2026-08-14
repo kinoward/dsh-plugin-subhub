@@ -76,7 +76,9 @@ window.__ModuleLoader__.load({
 			contextTag: "上下文 {value}",
 			imageTag: "支持图片",
 			reasoningTag: "推理 {names}",
-			defaultTag: "默认 {name}"
+			defaultTag: "默认 {name}",
+			expand: "展开",
+			collapse: "收起"
 		};
 		/** English dictionary, checked complete against the zh key set. */
 		const en = {
@@ -122,7 +124,9 @@ window.__ModuleLoader__.load({
 			contextTag: "Context {value}",
 			imageTag: "Image input",
 			reasoningTag: "Reasoning {names}",
-			defaultTag: "Default {name}"
+			defaultTag: "Default {name}",
+			expand: "Expand",
+			collapse: "Collapse"
 		};
 		const css = [
 			".kino-sub-root{width:100%;max-width:720px;display:flex;flex-direction:column;gap:12px;color:var(--dsw-alias-label-primary)}",
@@ -171,7 +175,11 @@ window.__ModuleLoader__.load({
 			".kino-sub-model-desc{margin:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}",
 			".kino-sub-catalog-mount{display:flex;flex-direction:column;gap:10px;min-width:0}",
 			".kino-sub-retry{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);height:28px;color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer;background:0 0;border-radius:14px;align-self:flex-start;padding:0 10px;font-size:12px;line-height:18px}",
-			".kino-sub-retry:hover{background:var(--dsw-alias-interactive-bg-hover)}"
+			".kino-sub-retry:hover{background:var(--dsw-alias-interactive-bg-hover)}",
+			".kino-sub-row-chevron{box-sizing:border-box;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border:none;background:0 0;color:var(--dsw-alias-label-tertiary);border-radius:6px;cursor:pointer;padding:0}",
+			".kino-sub-row-chevron:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}",
+			".kino-sub-row-chevron svg{transition:transform .12s}",
+			".kino-sub-row-chevron-open svg{transform:rotate(90deg)}"
 		].join("\n");
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=\"kino-subscriptions\"]") === null) {
 			const tag = document.createElement("style");
@@ -326,15 +334,18 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/**
-		 * Models-page augmentation: when the user expands the OpenAI 订阅 row,
-		 * the shell renders its generic settings editor (a hint plus save /
-		 * cancel actions). Hide that chrome and show the live, read-only model
-		 * catalog instead. A MutationObserver re-applies after shell re-renders
-		 * because the shell's React can drop the foreign nodes.
+		 * Models-page augmentation for subscription providers. Two things
+		 * happen per provider row: the generic "edit" button is hidden and
+		 * replaced by a chevron toggle that expands the same shell state, and
+		 * the expanded shell editor (a hint plus save / cancel actions) is
+		 * replaced by the live, read-only model catalog. A MutationObserver
+		 * re-applies after shell re-renders because the shell's React can drop
+		 * the foreign nodes.
 		 */
 		function installModelCatalogAugmentation(ctx, t) {
 			if (typeof document === "undefined") return () => {};
-			const OPENAI_NAME = "OpenAI 订阅";
+			const SUBSCRIPTION_NAMES = ["OpenAI 订阅"];
+			const CHEVRON_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4 L10 8 L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 			const catalogCache = { at: 0, value: void 0 };
 			let inflight;
 			const loadCatalog = () => {
@@ -351,19 +362,61 @@ window.__ModuleLoader__.load({
 				}
 				return inflight;
 			};
-			const mounted = new Set();
-			const views = new WeakMap();
-			const augment = (editor) => {
+			const findEditButton = (row) => {
+				for (const button of row.querySelectorAll("button")) {
+					const cls = typeof button.className === "string" ? button.className : "";
+					if (cls.includes("secondaryButton")) return button;
+				}
+				return void 0;
+			};
+			const rows = new Set();
+			const rowViews = new WeakMap();
+			const editorViews = new WeakMap();
+			const augmentRow = (row) => {
+				const head = row.children[0];
+				if (!(head instanceof HTMLElement)) return;
+				let actions;
+				for (const child of Array.from(head.children)) {
+					const cls = typeof child.className === "string" ? child.className : "";
+					if (cls.includes("rowActions")) {
+						actions = child;
+						break;
+					}
+				}
+				if (actions === void 0) return;
+				const edit = findEditButton(row);
+				if (edit !== void 0 && edit.style.display !== "none") edit.style.display = "none";
+				let view = rowViews.get(row);
+				if (view === void 0 || !view.button.isConnected) {
+					const button = document.createElement("button");
+					button.type = "button";
+					button.className = "kino-sub-row-chevron";
+					button.innerHTML = CHEVRON_SVG;
+					button.addEventListener("click", () => {
+						const current = findEditButton(row);
+						if (current !== void 0) current.click();
+					});
+					view = { button };
+					rowViews.set(row, view);
+					actions.appendChild(button);
+				}
+				const open = row.children.length >= 2;
+				view.button.classList.toggle("kino-sub-row-chevron-open", open);
+				view.button.setAttribute("aria-expanded", String(open));
+				view.button.setAttribute("aria-label", t(open ? "collapse" : "expand"));
+				view.button.setAttribute("title", t(open ? "collapse" : "expand"));
+			};
+			const augmentEditor = (editor) => {
 				for (const child of Array.from(editor.children)) {
 					const cls = typeof child.className === "string" ? child.className : "";
 					if ((cls.includes("advancedHint") || cls.includes("editorActions")) && child.style.display !== "none") child.style.display = "none";
 				}
-				let view = views.get(editor);
+				let view = editorViews.get(editor);
 				if (view === void 0) {
 					const container = document.createElement("div");
 					container.className = "kino-sub-catalog-mount";
 					view = { container };
-					views.set(editor, view);
+					editorViews.set(editor, view);
 				}
 				if (!view.container.isConnected) {
 					editor.appendChild(view.container);
@@ -375,18 +428,17 @@ window.__ModuleLoader__.load({
 			let scanning = false;
 			const scan = () => {
 				scanning = false;
-				for (const editor of [...mounted]) {
-					if (editor.isConnected) continue;
-					mounted.delete(editor);
+				for (const row of [...rows]) {
+					if (row.isConnected) continue;
+					rows.delete(row);
 				}
 				for (const span of document.querySelectorAll("span")) {
-					if (span.textContent !== OPENAI_NAME) continue;
-					const li = span.closest("li");
-					if (li === null || li.children.length < 2) continue;
-					const editor = li.children[1];
-					if (!(editor instanceof HTMLElement)) continue;
-					mounted.add(editor);
-					augment(editor);
+					if (!SUBSCRIPTION_NAMES.includes(span.textContent)) continue;
+					const row = span.closest("li");
+					if (row === null) continue;
+					rows.add(row);
+					augmentRow(row);
+					if (row.children.length >= 2 && row.children[1] instanceof HTMLElement) augmentEditor(row.children[1]);
 				}
 			};
 			const observer = new MutationObserver(() => {
@@ -397,15 +449,18 @@ window.__ModuleLoader__.load({
 			observer.observe(document.body, { childList: true, subtree: true });
 			scan();
 			const unsubscribeLocale = ctx.locale.subscribe(() => {
-				for (const editor of mounted) {
-					const view = views.get(editor);
-					if (view !== void 0 && view.container.isConnected) renderCatalogInto(view.container, t, loadCatalog);
+				for (const row of rows) {
+					augmentRow(row);
+					if (row.children.length >= 2 && row.children[1] instanceof HTMLElement) {
+						const view = editorViews.get(row.children[1]);
+						if (view !== void 0 && view.container.isConnected) renderCatalogInto(view.container, t, loadCatalog);
+					}
 				}
 			});
 			return () => {
 				unsubscribeLocale();
 				observer.disconnect();
-				mounted.clear();
+				rows.clear();
 			};
 		}
 		/**
@@ -715,7 +770,7 @@ window.__ModuleLoader__.load({
 			ctx.effect(() => ctx.locale.register(NS, { zh, en }), "kino-codex: subscription dictionaries");
 			const t = ctx.locale.bind(NS);
 			const subscribeLocale = (listener) => ctx.locale.subscribe(listener);
-			ctx.effect(() => installModelCatalogAugmentation(ctx, t), "kino-codex: models page catalog augmentation");
+			ctx.effect(() => installModelCatalogAugmentation(ctx, t), "kino-codex: models page augmentation");
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
 				name: "settings.section",
 				id: "third-party-subscriptions",
