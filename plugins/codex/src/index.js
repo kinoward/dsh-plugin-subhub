@@ -807,7 +807,7 @@ var CodexAdapter = class extends LlmAdapter {
 	providerInfo(provider) {
 		return {
 			id: provider,
-			name: "OpenAI 订阅"
+			name: this.config.displayName()
 		};
 	}
 	providerRetryPolicy(_provider) {
@@ -1169,10 +1169,23 @@ function apply(ctx, config) {
 	ctx.inject(["attachments"], (attachmentCtx) => {
 		attachments = attachmentCtx.attachments;
 	});
+	// Provider display name follows the harness language preference the same
+	// way the client dictionaries do: the locale plugin persists an explicit
+	// choice in the `locale` settings namespace, and unset falls back to
+	// Chinese, matching the locale service's zh fallback.
+	const localePreference = () => {
+		const settings = ctx.get("settings");
+		if (settings === void 0) return void 0;
+		const locale = settings.get("locale");
+		const preference = locale !== null && typeof locale === "object" ? locale.preference : void 0;
+		return typeof preference === "string" && preference.length > 0 ? preference : void 0;
+	};
+	const providerDisplayName = () => localePreference() === "en" ? "OpenAI subscription" : "OpenAI 订阅";
 	const adapter = new CodexAdapter({
 		options,
 		tokenStore,
 		resolveAttachments: () => attachments ?? ctx.get("attachments"),
+		displayName: providerDisplayName,
 		logger: ctx.logger
 	});
 	// The provider only becomes visible in the Models page and the model
@@ -1190,7 +1203,7 @@ function apply(ctx, config) {
 		if (shouldRegister) {
 			if (directoryHandle === void 0) directoryHandle = ctx.llm.registerConfigurableProviders([{
 				provider: PROVIDER,
-				displayName: "OpenAI 订阅",
+				displayName: providerDisplayName(),
 				settingsNs: NS,
 				settingsPath: []
 			}]);
@@ -1211,6 +1224,18 @@ function apply(ctx, config) {
 		}
 	};
 	syncRegistration();
+	const syncDisplayName = () => {
+		if (directoryHandle === void 0) return;
+		directoryHandle.replace([{
+			provider: PROVIDER,
+			displayName: providerDisplayName(),
+			settingsNs: NS,
+			settingsPath: []
+		}]);
+	};
+	ctx.on("settings/updated", (ns) => {
+		if (ns === "locale") syncDisplayName();
+	});
 	const ensureRegistrationFacts = () => {
 		if (registration === void 0) return;
 		const policy = options().retryPolicy;

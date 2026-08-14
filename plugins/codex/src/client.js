@@ -370,7 +370,7 @@ window.__ModuleLoader__.load({
 		 */
 		function installModelCatalogAugmentation(ctx, t) {
 			if (typeof document === "undefined") return () => {};
-			const SUBSCRIPTION_NAMES = ["OpenAI 订阅"];
+			const SUBSCRIPTION_NAMES = ["OpenAI 订阅", "OpenAI subscription"];
 			const CHEVRON_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6 L8 10 L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 			const catalogCache = { at: 0, value: void 0 };
 			let inflight;
