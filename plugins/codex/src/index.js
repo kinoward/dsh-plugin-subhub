@@ -602,32 +602,48 @@ const REASONING_EFFORTS = [
 		name: "High"
 	}
 ];
-/** Static fallback catalog used when the endpoint cannot be reached. */
+/**
+ * Static fallback catalog used when the endpoint cannot be reached.
+ * Context-window figures per model family follow the numbers the opencode
+ * project's codex plugin uses for ChatGPT subscriptions (gpt-5.6 family:
+ * 500k context / 372k input / 128k output; gpt-5.5 and below: 400k / 272k /
+ * 128k); the live /models catalog takes precedence when reachable.
+ */
 const DEFAULT_MODELS = [
 	{
 		id: "gpt-5.6-sol",
 		name: "GPT-5.6-Sol",
-		contextWindow: DEFAULT_CONTEXT_WINDOW
+		contextWindow: 500000
 	},
 	{
 		id: "gpt-5.6-terra",
 		name: "GPT-5.6-Terra",
-		contextWindow: DEFAULT_CONTEXT_WINDOW
+		contextWindow: 500000
+	},
+	{
+		id: "gpt-5.6-luna",
+		name: "GPT-5.6-Luna",
+		contextWindow: 500000
 	},
 	{
 		id: "gpt-5.5",
 		name: "GPT-5.5",
-		contextWindow: DEFAULT_CONTEXT_WINDOW
+		contextWindow: 400000
 	},
 	{
 		id: "gpt-5.4",
 		name: "GPT-5.4",
-		contextWindow: DEFAULT_CONTEXT_WINDOW
+		contextWindow: 400000
+	},
+	{
+		id: "gpt-5.4-mini",
+		name: "GPT-5.4-Mini",
+		contextWindow: 400000
 	},
 	{
 		id: "gpt-5.3-codex-spark",
 		name: "GPT-5.3-Codex-Spark",
-		contextWindow: DEFAULT_CONTEXT_WINDOW
+		contextWindow: 400000
 	}
 ];
 /** Pick the endpoint for one credential mode. */
@@ -1031,27 +1047,39 @@ function apply(ctx, config) {
 		tokenStore,
 		logger: ctx.logger
 	});
-	ctx.llm.registerConfigurableProviders([{
-		provider: PROVIDER,
-		displayName: "OpenAI 订阅",
-		settingsNs: NS,
-		settingsPath: []
-	}]);
-	// The provider route only appears once the user authenticated through the
-	// plugin's own login flow: registering the adapter is what puts the
-	// provider into the model picker and the Models page (both refresh on
-	// `llm/adapters-updated`), so login and logout gate visibility directly.
+	// The provider only becomes visible in the Models page and the model
+	// picker after the user authenticated through the plugin's own login
+	// flow. BOTH registrations are gated: the configurable-provider directory
+	// entry is what the Models page's provider list renders (the adapter only
+	// flips its `active` flag), and the adapter registration is what puts
+	// models into the picker. Login and logout (un)register both; the pages
+	// refresh on `llm/adapters-updated`.
+	let directoryHandle;
 	let registration;
 	let registeredPolicy;
 	const syncRegistration = () => {
 		const shouldRegister = tokenStore.hasTokens();
-		if (shouldRegister && registration === void 0) {
-			registration = ctx.llm.registerAdapter([PROVIDER], adapter);
-			registeredPolicy = options().retryPolicy;
-		} else if (!shouldRegister && registration !== void 0) {
-			registration();
-			registration = void 0;
-			registeredPolicy = void 0;
+		if (shouldRegister) {
+			if (directoryHandle === void 0) directoryHandle = ctx.llm.registerConfigurableProviders([{
+				provider: PROVIDER,
+				displayName: "OpenAI 订阅",
+				settingsNs: NS,
+				settingsPath: []
+			}]);
+			if (registration === void 0) {
+				registration = ctx.llm.registerAdapter([PROVIDER], adapter);
+				registeredPolicy = options().retryPolicy;
+			}
+		} else {
+			if (registration !== void 0) {
+				registration();
+				registration = void 0;
+				registeredPolicy = void 0;
+			}
+			if (directoryHandle !== void 0) {
+				directoryHandle();
+				directoryHandle = void 0;
+			}
 		}
 	};
 	syncRegistration();
@@ -1062,12 +1090,18 @@ function apply(ctx, config) {
 		registration.replace([PROVIDER]);
 		registeredPolicy = policy;
 	};
+	// Settings may arrive after this row mounts (and can change authFile), so
+	// the gating re-evaluates whenever the settings source wires or changes.
 	installSettingsSection(ctx, NS, Config, config, {
 		setSource: (source) => {
 			current = source;
 		},
-		onChange: ensureRegistrationFacts
+		onChange: () => {
+			ensureRegistrationFacts();
+			syncRegistration();
+		}
 	});
+	syncRegistration();
 	// Browser-side login API (web profiles only): the third-party
 	// subscriptions page drives the device-code flow through these routes.
 	// The webserver service can mount after this row, so the route rides its
