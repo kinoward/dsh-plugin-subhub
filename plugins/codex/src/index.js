@@ -590,7 +590,7 @@ class CodexTokenStore {
 			const efforts = levels.map((level) => typeof level === "string" ? { effort: level } : level).filter((level) => typeof level?.effort === "string" && WIRE_EFFORT_VALUES.has(level.effort)).map((level) => ({
 				id: ReasoningEffortId(level.effort),
 				name: EFFORT_DISPLAY_NAMES[level.effort] ?? level.effort,
-				...typeof level.description === "string" && level.description !== "" ? { description: level.effort === "ultra" ? `${level.description}(请求按官方 codex CLI 做法映射为 max 推理)` : level.description } : {}
+				...typeof level.description === "string" && level.description !== "" ? { description: level.effort === "ultra" ? `${level.description}(请求按官方 codex CLI 做法映射为 max 推理,并注入主动委派指令)` : level.description } : {}
 			}));
 			const defaultLevel = entry.default_reasoning_level;
 			const contextWindow = Number.isInteger(entry.context_window) && entry.context_window > 0 ? entry.context_window : void 0;
@@ -718,6 +718,28 @@ function modelInfo(provider, model) {
 	};
 }
 /**
+ * The proactive-delegation directive injected while ultra effort is selected
+ * AND the agent carries a subagent tool. This mirrors the official codex
+ * CLI's Ultra behavior (max reasoning + MultiAgentMode::Proactive): the
+ * runtime cannot split tasks itself, so the model is instructed to drive the
+ * harness's own subagent tools — the closest native equivalent.
+ */
+const ULTRA_DELEGATION_DIRECTIVE = [
+	"ULTRA MODE — PROACTIVE TASK DELEGATION",
+	"Reasoning depth is already at maximum. To make the most of it, delegate proactively:",
+	"- Decompose the task into independent subtasks; for every subtask that can run autonomously, launch a background subagent (subagent tool) with a complete, standalone prompt.",
+	"- Start independent subagents in parallel instead of one after another.",
+	"- Collect and verify every subagent result yourself; never delegate final integration, decisions, or the final answer.",
+	"- Do not delegate subtasks that need the whole conversation context."
+].join("\n");
+function applyUltraDelegationDirective(options) {
+	if (options.reasoningEffort !== "ultra") return options;
+	const hasDelegationTool = Array.isArray(options.tools) && options.tools.some((tool) => tool.name === "subagent" || tool.name === "subagent_fork");
+	if (!hasDelegationTool) return options;
+	const system = options.system === void 0 || options.system === "" ? ULTRA_DELEGATION_DIRECTIVE : `${options.system}\n\n${ULTRA_DELEGATION_DIRECTIVE}`;
+	return system === options.system ? options : { ...options, system };
+}
+/**
  * `CodexAdapter`: fetch + SSE against the Codex backend's Responses API,
  * emitting harness StreamChunks. Connection facts and the bearer token are
  * resolved once per operation, so auth rotation reaches the very next
@@ -776,9 +798,10 @@ var CodexAdapter = class extends LlmAdapter {
 		const connection = this.config.options();
 		const auth = await this.config.tokenStore.getToken();
 		const baseURL = effectiveBaseURL(connection, auth.mode);
+		const dispatch = applyUltraDelegationDirective(options);
 		const consumer = new AbortController();
 		const watchdog = idleWatchdog(options.signal === void 0 ? consumer.signal : AbortSignal.any([options.signal, consumer.signal]), connection.streamIdleTimeoutMs, "LLM_STREAM_IDLE_TIMEOUT");
-		const iterator = this.request(options, watchdog.signal, baseURL, auth, () => {
+		const iterator = this.request(dispatch, watchdog.signal, baseURL, auth, () => {
 			watchdog.pulse();
 		})[Symbol.asyncIterator]();
 		let exhausted = false;
@@ -1149,4 +1172,4 @@ function apply(ctx, config) {
 	});
 }
 //#endregion
-export { CHATGPT_CODEX_BASE_URL, CodexAdapter, CodexTokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, inject, name, resolveAdapterOptions };
+export { CHATGPT_CODEX_BASE_URL, CodexAdapter, CodexTokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyUltraDelegationDirective, inject, name, resolveAdapterOptions };
