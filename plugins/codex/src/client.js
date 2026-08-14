@@ -179,7 +179,7 @@ window.__ModuleLoader__.load({
 			".kino-sub-row-chevron{box-sizing:border-box;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border:none;background:0 0;color:var(--dsw-alias-label-tertiary);border-radius:6px;cursor:pointer;padding:0}",
 			".kino-sub-row-chevron:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}",
 			".kino-sub-row-chevron svg{transition:transform .12s}",
-			".kino-sub-row-chevron-open svg{transform:rotate(90deg)}"
+			".kino-sub-row-chevron-open svg{transform:rotate(180deg)}"
 		].join("\n");
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=\"kino-subscriptions\"]") === null) {
 			const tag = document.createElement("style");
@@ -337,15 +337,15 @@ window.__ModuleLoader__.load({
 		 * Models-page augmentation for subscription providers. Two things
 		 * happen per provider row: the generic "edit" button is hidden and
 		 * replaced by a chevron toggle that expands the same shell state, and
-		 * the expanded shell editor (a hint plus save / cancel actions) is
-		 * replaced by the live, read-only model catalog. A MutationObserver
-		 * re-applies after shell re-renders because the shell's React can drop
-		 * the foreign nodes.
+		 * the expanded shell editor's generic chrome (header, hint, and save /
+		 * cancel actions) is replaced by the live, read-only model catalog. A
+		 * MutationObserver re-applies after shell re-renders because the
+		 * shell's React can drop the foreign nodes.
 		 */
 		function installModelCatalogAugmentation(ctx, t) {
 			if (typeof document === "undefined") return () => {};
 			const SUBSCRIPTION_NAMES = ["OpenAI 订阅"];
-			const CHEVRON_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4 L10 8 L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+			const CHEVRON_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6 L8 10 L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 			const catalogCache = { at: 0, value: void 0 };
 			let inflight;
 			const loadCatalog = () => {
@@ -409,7 +409,7 @@ window.__ModuleLoader__.load({
 			const augmentEditor = (editor) => {
 				for (const child of Array.from(editor.children)) {
 					const cls = typeof child.className === "string" ? child.className : "";
-					if ((cls.includes("advancedHint") || cls.includes("editorActions")) && child.style.display !== "none") child.style.display = "none";
+					if ((cls.includes("editorHeader") || cls.includes("advancedHint") || cls.includes("editorActions")) && child.style.display !== "none") child.style.display = "none";
 				}
 				let view = editorViews.get(editor);
 				if (view === void 0) {
