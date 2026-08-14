@@ -161,7 +161,9 @@ window.__ModuleLoader__.load({
 			".kino-sub-code{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:18px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-fill-tsp-secondary);border-radius:6px;padding:6px 10px;overflow-wrap:anywhere}",
 			".kino-sub-usercode{flex:0 1 auto;font-size:15px;letter-spacing:.06em}",
 			".kino-sub-waiting{display:flex;align-items:center;gap:8px;margin:0;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}",
-			".kino-sub-catalog{display:flex;flex-direction:column;gap:10px;width:100%;min-width:0}",
+			".kino-sub-catalog{display:flex;flex-direction:column;gap:10px;width:100%;min-width:0;animation:kino-sub-fade-in .12s ease}",
+			"@keyframes kino-sub-fade-in{from{opacity:0}to{opacity:1}}",
+			"@media (prefers-reduced-motion:reduce){.kino-sub-catalog{animation:none}}",
 			".kino-sub-catalog-head{display:flex;flex-direction:column;gap:2px}",
 			".kino-sub-catalog-title{color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:500;line-height:18px}",
 			".kino-sub-catalog-meta{margin:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}",
@@ -287,8 +289,44 @@ window.__ModuleLoader__.load({
 			}
 			return entry;
 		}
+		/** Render the catalog's ready state synchronously (no loading flash). */
+		function renderCatalogReady(container, t, models) {
+			container.textContent = "";
+			const section = document.createElement("section");
+			section.className = "kino-sub-catalog";
+			section.setAttribute("aria-label", t("modelsTitle"));
+			const head = document.createElement("div");
+			head.className = "kino-sub-catalog-head";
+			const title = document.createElement("span");
+			title.className = "kino-sub-catalog-title";
+			title.textContent = t("modelsTitle");
+			head.appendChild(title);
+			section.appendChild(head);
+			if (models.length === 0) {
+				const empty = document.createElement("p");
+				empty.className = "kino-sub-hint";
+				empty.textContent = t("modelsEmpty");
+				section.appendChild(empty);
+				container.appendChild(section);
+				return;
+			}
+			const meta = document.createElement("span");
+			meta.className = "kino-sub-catalog-meta";
+			meta.textContent = t("modelsMeta", { count: models.length });
+			head.appendChild(meta);
+			const list = document.createElement("div");
+			list.className = "kino-sub-catalog-list";
+			for (const model of models) list.appendChild(catalogRowNode(model, t));
+			section.appendChild(list);
+			container.appendChild(section);
+		}
 		/** Render the read-only catalog into one mount container. */
-		function renderCatalogInto(container, t, loadCatalog) {
+		function renderCatalogInto(container, t, loadCatalog, warmCatalog) {
+			const cached = typeof warmCatalog === "function" ? warmCatalog() : void 0;
+			if (cached !== void 0) {
+				renderCatalogReady(container, t, cached);
+				return;
+			}
 			container.textContent = "";
 			const section = document.createElement("section");
 			section.className = "kino-sub-catalog";
@@ -306,31 +344,23 @@ window.__ModuleLoader__.load({
 			section.appendChild(status);
 			container.appendChild(section);
 			loadCatalog().then((models) => {
-				status.remove();
-				if (models.length === 0) {
-					const empty = document.createElement("p");
-					empty.className = "kino-sub-hint";
-					empty.textContent = t("modelsEmpty");
-					section.appendChild(empty);
-					return;
-				}
-				const meta = document.createElement("span");
-				meta.className = "kino-sub-catalog-meta";
-				meta.textContent = t("modelsMeta", { count: models.length });
-				head.appendChild(meta);
-				const list = document.createElement("div");
-				list.className = "kino-sub-catalog-list";
-				for (const model of models) list.appendChild(catalogRowNode(model, t));
-				section.appendChild(list);
+				renderCatalogReady(container, t, models);
 			}, (error) => {
-				status.className = "kino-sub-error";
-				status.textContent = t("modelsError", { message: error?.message ?? String(error) });
+				container.textContent = "";
+				const failed = document.createElement("section");
+				failed.className = "kino-sub-catalog";
+				failed.setAttribute("aria-label", t("modelsTitle"));
+				const message = document.createElement("p");
+				message.className = "kino-sub-error";
+				message.textContent = t("modelsError", { message: error?.message ?? String(error) });
+				failed.appendChild(message);
 				const retry = document.createElement("button");
 				retry.type = "button";
 				retry.className = "kino-sub-retry";
 				retry.textContent = t("retry");
-				retry.addEventListener("click", () => renderCatalogInto(container, t, loadCatalog));
-				section.appendChild(retry);
+				retry.addEventListener("click", () => renderCatalogInto(container, t, loadCatalog, warmCatalog));
+				failed.appendChild(retry);
+				container.appendChild(failed);
 			});
 		}
 		/**
@@ -348,8 +378,10 @@ window.__ModuleLoader__.load({
 			const CHEVRON_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6 L8 10 L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 			const catalogCache = { at: 0, value: void 0 };
 			let inflight;
+			const warmCatalog = () => catalogCache.value !== void 0 && Date.now() - catalogCache.at < 60000 ? catalogCache.value : void 0;
 			const loadCatalog = () => {
-				if (catalogCache.value !== void 0 && Date.now() - catalogCache.at < 60000) return Promise.resolve(catalogCache.value);
+				const warm = warmCatalog();
+				if (warm !== void 0) return Promise.resolve(warm);
 				if (inflight === void 0) {
 					inflight = api("/models").then((result) => {
 						const models = Array.isArray(result.models) ? result.models : [];
@@ -420,10 +452,10 @@ window.__ModuleLoader__.load({
 				}
 				if (!view.container.isConnected) {
 					editor.appendChild(view.container);
-					if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, loadCatalog);
+					if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, loadCatalog, warmCatalog);
 					return;
 				}
-				if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, loadCatalog);
+				if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, loadCatalog, warmCatalog);
 			};
 			let scanning = false;
 			const scan = () => {
@@ -444,7 +476,7 @@ window.__ModuleLoader__.load({
 			const observer = new MutationObserver(() => {
 				if (scanning) return;
 				scanning = true;
-				setTimeout(scan, 120);
+				queueMicrotask(scan);
 			});
 			observer.observe(document.body, { childList: true, subtree: true });
 			scan();
@@ -453,7 +485,7 @@ window.__ModuleLoader__.load({
 					augmentRow(row);
 					if (row.children.length >= 2 && row.children[1] instanceof HTMLElement) {
 						const view = editorViews.get(row.children[1]);
-						if (view !== void 0 && view.container.isConnected) renderCatalogInto(view.container, t, loadCatalog);
+						if (view !== void 0 && view.container.isConnected) renderCatalogInto(view.container, t, loadCatalog, warmCatalog);
 					}
 				}
 			});
