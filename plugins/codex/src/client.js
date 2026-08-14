@@ -21,7 +21,6 @@ window.__ModuleLoader__.load({
 			IconCopyOutline16,
 			IconGlobeOutline14,
 			IconRightUpOutline16,
-			IconSparkle16,
 			IconUserOutline16,
 			IconWarningOutline16,
 			writeClipboard
@@ -40,19 +39,14 @@ window.__ModuleLoader__.load({
 			retry: "重试",
 			statusLoggedIn: "已登录",
 			statusLoggedOut: "未登录",
-			statusComingSoon: "即将支持",
 			login: "登录",
 			relogin: "重新登录",
 			logout: "退出登录",
 			loggingOut: "退出中…",
 			credentialFile: "凭据文件",
-			comingSoonHint: "登录入口即将开放,敬请期待。",
 			openaiName: "OpenAI 订阅",
 			openaiDesc: "GPT 系列模型,使用 ChatGPT / Codex 订阅账户登录。",
-			anthropicName: "Anthropic 订阅",
-			anthropicDesc: "Claude 系列模型。",
-			volcanoName: "火山方舟 Coding Plan",
-			volcanoDesc: "豆包 / 深度求索系列模型。",
+			moreComing: "其他服务即将接入,敬请期待。",
 			modalTitle: "登录 {name}",
 			modalDesc: "在浏览器中完成一次性设备授权,登录成功后此页面自动同步。",
 			close: "关闭",
@@ -82,19 +76,14 @@ window.__ModuleLoader__.load({
 			retry: "Retry",
 			statusLoggedIn: "Signed in",
 			statusLoggedOut: "Signed out",
-			statusComingSoon: "Coming soon",
 			login: "Sign in",
 			relogin: "Sign in again",
 			logout: "Sign out",
 			loggingOut: "Signing out…",
 			credentialFile: "Credential file",
-			comingSoonHint: "Sign-in is not available yet.",
 			openaiName: "OpenAI subscription",
 			openaiDesc: "GPT models, signed in with a ChatGPT / Codex subscription account.",
-			anthropicName: "Anthropic subscription",
-			anthropicDesc: "Claude models.",
-			volcanoName: "Volcano Ark Coding Plan",
-			volcanoDesc: "Doubao / DeepSeek models.",
+			moreComing: "More providers are on the way. Stay tuned.",
 			modalTitle: "Sign in to {name}",
 			modalDesc: "Complete a one-time device authorization in the browser; this page syncs automatically after sign-in.",
 			close: "Close",
@@ -132,6 +121,7 @@ window.__ModuleLoader__.load({
 			".kino-sub-file-label{flex:none;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}",
 			".kino-sub-file-path{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
 			".kino-sub-hint{margin:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}",
+			".kino-sub-more{display:flex;align-items:center;gap:8px;margin:0;padding:2px 0 0;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}",
 			".kino-sub-error{margin:0;color:var(--dsw-alias-state-error-primary);font-size:13px;line-height:20px}",
 			".kino-sub-error-row{display:flex;align-items:center;gap:8px;color:var(--dsw-alias-state-error-primary);font-size:13px;line-height:20px}",
 			".kino-sub-muted{display:flex;align-items:center;gap:8px;margin:0;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}",
@@ -171,6 +161,18 @@ window.__ModuleLoader__.load({
 			}
 			if (!response.ok) throw new Error(body?.message ?? `HTTP ${response.status}`);
 			return body;
+		}
+		/** Inline OpenAI logomark (official mark, drawn in currentColor). */
+		function OpenAILogo({ size = 16 }) {
+			return h("svg", {
+				width: size,
+				height: size,
+				viewBox: "0 0 24 24",
+				fill: "currentColor",
+				"aria-hidden": "true"
+			}, h("path", {
+				d: "M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"
+			}));
 		}
 		/** Shell-style copy button with one-second "copied" feedback. */
 		function CopyButton({ t, text }) {
@@ -365,14 +367,13 @@ window.__ModuleLoader__.load({
 			return h("div", { className: "kino-sub-panel" }, content);
 		}
 		/**
-		 * One provider card in the hub. `wired` providers offer the shared
-		 * login modal; un-wired ones show a "coming soon" hint.
+		 * One provider card in the hub. Each card renders the provider's own
+		 * logo and offers the shared login modal.
 		 */
 		function ProviderCard({ t, provider, loggedIn, authFile, onChanged }) {
 			const [open, setOpen] = React.useState(false);
 			const [busy, setBusy] = React.useState(false);
 			const [error, setError] = React.useState("");
-			const wired = provider.wired === true;
 			const logout = async () => {
 				setBusy(true);
 				setError("");
@@ -385,24 +386,19 @@ window.__ModuleLoader__.load({
 					setBusy(false);
 				}
 			};
-			const icons = {
-				codex: h(IconSparkle16),
-				anthropic: h(IconUserOutline16),
-				volcano: h(IconGlobeOutline14)
-			};
 			return h("div", { className: "kino-sub-card" }, [
 				h("div", { className: "kino-sub-head", key: "head" }, [
-					h("span", { className: "kino-sub-icon", "aria-hidden": "true" }, icons[provider.id]),
+					h("span", { className: "kino-sub-icon", "aria-hidden": "true" }, provider.logo),
 					h("span", { className: "kino-sub-name" }, t(provider.nameKey)),
 					h("span", {
-						className: wired && loggedIn === true ? "kino-sub-status kino-sub-status-ok" : "kino-sub-status"
+						className: loggedIn === true ? "kino-sub-status kino-sub-status-ok" : "kino-sub-status"
 					}, [
-						wired && loggedIn === true ? h(IconCheckOutline16, { size: 12, "aria-hidden": "true" }) : null,
-						t(wired ? (loggedIn === true ? "statusLoggedIn" : "statusLoggedOut") : "statusComingSoon")
+						loggedIn === true ? h(IconCheckOutline16, { size: 12, "aria-hidden": "true" }) : null,
+						t(loggedIn === true ? "statusLoggedIn" : "statusLoggedOut")
 					])
 				]),
 				h("p", { className: "kino-sub-desc", key: "desc" }, t(provider.descKey)),
-				wired ? h("div", { className: "kino-sub-actions", key: "actions" }, [
+				h("div", { className: "kino-sub-actions", key: "actions" }, [
 					h(Button, {
 						variant: "primary",
 						size: "md",
@@ -415,7 +411,7 @@ window.__ModuleLoader__.load({
 						disabled: busy,
 						onClick: () => void logout()
 					}, t(busy ? "loggingOut" : "logout")) : null
-				]) : h("p", { className: "kino-sub-hint", key: "hint" }, t("comingSoonHint")),
+				]),
 				loggedIn === true && typeof authFile === "string" && authFile !== "" ? h("div", {
 					className: "kino-sub-file",
 					key: "file",
@@ -467,9 +463,12 @@ window.__ModuleLoader__.load({
 				return unsubscribe;
 			}, [subscribeLocale, refresh]);
 			const providers = [
-				{ id: "codex", nameKey: "openaiName", descKey: "openaiDesc", wired: true },
-				{ id: "anthropic", nameKey: "anthropicName", descKey: "anthropicDesc", wired: false },
-				{ id: "volcano", nameKey: "volcanoName", descKey: "volcanoDesc", wired: false }
+				{
+					id: "codex",
+					nameKey: "openaiName",
+					descKey: "openaiDesc",
+					logo: h(OpenAILogo, { size: 16 })
+				}
 			];
 			return h("div", { className: "kino-sub-root" }, [
 				h("h3", { className: "kino-sub-title", key: "title" }, t("nav")),
@@ -487,10 +486,14 @@ window.__ModuleLoader__.load({
 					key: provider.id,
 					t,
 					provider,
-					loggedIn: provider.wired === true && state.loggedIn === true,
+					loggedIn: state.loggedIn === true,
 					authFile: state.authFile,
 					onChanged: () => void refresh()
-				}))) : null
+				}))) : null,
+				state.phase === "ready" ? h("p", { className: "kino-sub-more", key: "more" }, [
+					h(IconGlobeOutline14, { size: 14, "aria-hidden": "true" }),
+					t("moreComing")
+				]) : null
 			]);
 		}
 		function apply(ctx) {
