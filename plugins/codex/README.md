@@ -29,7 +29,7 @@
 
 ## 使用
 
-登录完成后,在 DeepSeek Harness 的模型选择器里把提供商切到「OpenAI 订阅」,再选一个模型即可。**模型列表完全动态**:实时取自你账户的 `/models` 接口(缓存 5 分钟),接口返回什么就显示什么;只有接口不可达时才用内置备用列表兜底,静态列表绝不混入在线展示。
+登录完成后,在 DeepSeek Harness 的模型选择器里把提供商切到「OpenAI 订阅」,再选一个模型即可。**模型列表完全动态**:实时取自你账户的 `/models` 接口(缓存 5 分钟),接口返回什么就显示什么;内部条目(如 `-wm` Work Mode 路由别名、自动审查模型)会按 `visibility: hide` 过滤,与官方 codex CLI 的显示一致;只有接口不可达时才用内置备用列表兜底,静态列表绝不混入在线展示。上下文窗口也直接采用接口的 `context_window` 字段。
 
 **设置思考深度**:在「模型」页的「OpenAI 订阅」服务行点「编辑」可配置默认上下文窗口、默认思考深度(`defaultReasoningEffort`)等;单次会话的模型与思考深度在模型选择器里随时切换。可选档位由模型接口**动态下发、不写死**:每个模型展示它自己支持的档位(如 gpt-5.6-sol 支持 `low`~`ultra` 六档,gpt-5.5 支持 `low`~`xhigh` 四档),默认档也取自接口。
 
@@ -42,7 +42,7 @@
 | `authFile` | `~/.kino-dsh/codex-auth.json` | 鉴权文件路径;默认插件自有文件,显式指定后只读写该文件 |
 | `baseURL` | `https://chatgpt.com/backend-api/codex` | ChatGPT OAuth 模式的后端地址 |
 | `apiBaseURL` | `https://api.openai.com/v1` | API key 模式的后端地址 |
-| `defaultContextWindow` | `400000` | 未知模型的默认上下文窗口(token 数);已知模型族按接口外补充的族表取值(gpt-5.6 族 500000) |
+| `defaultContextWindow` | `400000` | 未知模型的默认上下文窗口(token 数);已知模型直接用接口下发的 `context_window` |
 | `modelsCacheTtlMs` | `300000` | 模型列表缓存时长(毫秒) |
 | `defaultReasoningEffort` | 空(用模型接口默认) | 默认思考深度:`low`/`medium`/`high`/`xhigh`/`max`/`ultra`;模型不支持的档位会回退到接口默认 |
 | `streamIdleTimeoutMs` | `300000` | 流式响应空闲超时(毫秒) |

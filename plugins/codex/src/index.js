@@ -575,7 +575,7 @@ class CodexTokenStore {
 		}
 		const body = await response.json();
 		const raw = Array.isArray(body?.models) ? body.models : Array.isArray(body?.data) ? body.data : [];
-		this.catalog = raw.filter((entry) => typeof entry?.slug === "string" || typeof entry?.id === "string").map((entry) => {
+		this.catalog = raw.filter((entry) => typeof entry?.slug === "string" || typeof entry?.id === "string").filter((entry) => entry.visibility !== "hide").map((entry) => {
 			const levels = Array.isArray(entry.supported_reasoning_levels) ? entry.supported_reasoning_levels : [];
 			const efforts = levels.map((level) => typeof level === "string" ? { effort: level } : level).filter((level) => typeof level?.effort === "string" && WIRE_EFFORT_VALUES.has(level.effort)).map((level) => ({
 				id: ReasoningEffortId(level.effort),
@@ -583,12 +583,14 @@ class CodexTokenStore {
 				...typeof level.description === "string" && level.description !== "" ? { description: level.description } : {}
 			}));
 			const defaultLevel = entry.default_reasoning_level;
+			const contextWindow = Number.isInteger(entry.context_window) && entry.context_window > 0 ? entry.context_window : void 0;
 			return {
 				provider: PROVIDER,
 				id: entry.slug ?? entry.id,
 				name: entry.display_name ?? entry.name ?? entry.slug ?? entry.id,
 				...typeof entry.description === "string" && entry.description !== "" ? { description: entry.description } : {},
 				inputModalities: ["text"],
+				...contextWindow === void 0 ? {} : { contextWindow },
 				...efforts.length === 0 ? {} : { reasoning: {
 					efforts,
 					...defaultLevel !== void 0 && efforts.some((effort) => effort.id === defaultLevel) ? { defaultEffort: ReasoningEffortId(defaultLevel) } : {}
@@ -648,56 +650,47 @@ const REASONING_EFFORTS = [
 	}
 ];
 /**
- * Context-window table by model family. The /models endpoint does not
- * disclose context capacities, so this local table only fills that one
- * metadata gap; the figures follow the opencode project's codex plugin
- * (gpt-5.6 family: 500k context / 372k input / 128k output; earlier
- * families: 400k / 272k / 128k). Unknown ids fall back to the configured
- * defaultContextWindow.
- */
-const FAMILY_CONTEXT_WINDOWS = [
-	{
-		pattern: /^gpt-5\.6/,
-		window: 500000
-	}
-];
-function contextWindowFor(id) {
-	for (const family of FAMILY_CONTEXT_WINDOWS) if (family.pattern.test(id)) return family.window;
-	return void 0;
-}
-/**
  * Offline fallback catalog, shown only while the /models endpoint is
  * unreachable. It never merges into the live list: online, the picker shows
- * exactly what the account's catalog returns.
+ * exactly what the account's catalog returns (internal aliases such as
+ * `visibility: "hide"` entries are filtered out, mirroring the official codex
+ * CLI). Context figures mirror the live endpoint's context_window values.
  */
 const DEFAULT_MODELS = [
 	{
 		id: "gpt-5.6-sol",
-		name: "GPT-5.6-Sol"
+		name: "GPT-5.6-Sol",
+		contextWindow: 272000
 	},
 	{
 		id: "gpt-5.6-terra",
-		name: "GPT-5.6-Terra"
+		name: "GPT-5.6-Terra",
+		contextWindow: 272000
 	},
 	{
 		id: "gpt-5.6-luna",
-		name: "GPT-5.6-Luna"
+		name: "GPT-5.6-Luna",
+		contextWindow: 272000
 	},
 	{
 		id: "gpt-5.5",
-		name: "GPT-5.5"
+		name: "GPT-5.5",
+		contextWindow: 272000
 	},
 	{
 		id: "gpt-5.4",
-		name: "GPT-5.4"
+		name: "GPT-5.4",
+		contextWindow: 272000
 	},
 	{
 		id: "gpt-5.4-mini",
-		name: "GPT-5.4-Mini"
+		name: "GPT-5.4-Mini",
+		contextWindow: 272000
 	},
 	{
 		id: "gpt-5.3-codex-spark",
-		name: "GPT-5.3-Codex-Spark"
+		name: "GPT-5.3-Codex-Spark",
+		contextWindow: 128000
 	}
 ];
 /** Pick the endpoint for one credential mode. */
@@ -760,7 +753,7 @@ var CodexAdapter = class extends LlmAdapter {
 					inputModalities: ["text"]
 				} : modelInfo(provider, live),
 				context: {
-					contextWindow: contextWindowFor(model) ?? config.defaultContextWindow
+					contextWindow: live?.contextWindow ?? DEFAULT_MODELS.find((entry) => entry.id === model)?.contextWindow ?? config.defaultContextWindow
 				},
 				reasoning: {
 					efforts,
