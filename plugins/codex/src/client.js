@@ -5,37 +5,148 @@
 // 火山方舟 Coding Plan, …) plug in by adding a card entry plus their own
 // host-side auth endpoints. Only after a successful login does the host
 // register the provider route, which is what makes it appear in the Models
-// page and the model picker. Hand-written client bundle in the shell's
-// module-loader format (no build step).
+// page and the model picker. The UI follows the shell design system: shell
+// primitives (Button / Modal / StateDot), --dsw-alias-* theme tokens, and
+// locale dictionaries registered through the locale service. Hand-written
+// client bundle in the shell's module-loader format (no build step).
 window.__ModuleLoader__.load({
 	id: "kino-dsh-plugins/codex",
 	factory: (require) => {
 		const React = require("react");
-		const Primitives = require("@deepseek-ai/dsh-client-ui-primitives");
-		const inject = ["slots"];
+		const {
+			Button,
+			Modal,
+			StateDot,
+			IconCheckOutline16,
+			IconCopyOutline16,
+			IconGlobeOutline14,
+			IconRightUpOutline16,
+			IconSparkle16,
+			IconUserOutline16,
+			IconWarningOutline16,
+			useCopyFeedback
+		} = require("@deepseek-ai/dsh-client-ui-primitives");
+		const inject = ["slots", "locale"];
 		const API = "/api/kino-codex";
 		const POLL_MS = 2500;
+		const NS = "settings.subscriptions";
+		const h = React.createElement;
+		/** Simplified Chinese dictionary (the key-set source of truth). */
+		const zh = {
+			nav: "第三方订阅",
+			intro: "在这里管理第三方订阅:登录成功后,对应服务会出现在「模型」页;退出登录后即移除。模型与思考深度请在「模型」页的服务行中设置。",
+			checking: "正在读取登录状态…",
+			statusError: "无法读取登录状态:{message}",
+			retry: "重试",
+			statusLoggedIn: "已登录",
+			statusLoggedOut: "未登录",
+			statusComingSoon: "即将支持",
+			login: "登录",
+			relogin: "重新登录",
+			logout: "退出登录",
+			loggingOut: "退出中…",
+			credentialFile: "凭据文件",
+			comingSoonHint: "登录入口即将开放,敬请期待。",
+			openaiName: "OpenAI 订阅",
+			openaiDesc: "GPT 系列模型,使用 ChatGPT / Codex 订阅账户登录。",
+			anthropicName: "Anthropic 订阅",
+			anthropicDesc: "Claude 系列模型。",
+			volcanoName: "火山方舟 Coding Plan",
+			volcanoDesc: "豆包 / 深度求索系列模型。",
+			modalTitle: "登录 {name}",
+			modalDesc: "在浏览器中完成一次性设备授权,登录成功后此页面自动同步。",
+			close: "关闭",
+			privacyNote: "登录凭据仅保存在本插件自己的文件中,不会读取 codex CLI 等其它程序的登录信息。",
+			requesting: "正在申请一次性登录码…",
+			step1: "打开下面的登录链接",
+			step2: "输入一次性码",
+			step3: "完成授权后,此页面会自动继续",
+			linkExpires: "一次性码 15 分钟内有效",
+			open: "打开链接",
+			copy: "复制",
+			copied: "已复制",
+			waitingForAuth: "等待授权中,请勿关闭此页面…",
+			loggedInDone: "登录成功,「{name}」现已出现在模型选择器中。",
+			loggedInReady: "已登录,「{name}」提供商已就绪。",
+			expired: "一次性码已过期,请重新登录。",
+			loginFailed: "登录失败:{message}",
+			loginButton: "使用 ChatGPT 账号登录",
+			loginButtonAgain: "使用新账号登录"
+		};
+		/** English dictionary, checked complete against the zh key set. */
+		const en = {
+			nav: "Subscriptions",
+			intro: "Manage third-party subscriptions here: after a successful sign-in the provider appears on the Models page, and signing out removes it. Models and reasoning levels are configured on the Models page.",
+			checking: "Reading login status…",
+			statusError: "Could not read login status: {message}",
+			retry: "Retry",
+			statusLoggedIn: "Signed in",
+			statusLoggedOut: "Signed out",
+			statusComingSoon: "Coming soon",
+			login: "Sign in",
+			relogin: "Sign in again",
+			logout: "Sign out",
+			loggingOut: "Signing out…",
+			credentialFile: "Credential file",
+			comingSoonHint: "Sign-in is not available yet.",
+			openaiName: "OpenAI subscription",
+			openaiDesc: "GPT models, signed in with a ChatGPT / Codex subscription account.",
+			anthropicName: "Anthropic subscription",
+			anthropicDesc: "Claude models.",
+			volcanoName: "Volcano Ark Coding Plan",
+			volcanoDesc: "Doubao / DeepSeek models.",
+			modalTitle: "Sign in to {name}",
+			modalDesc: "Complete a one-time device authorization in the browser; this page syncs automatically after sign-in.",
+			close: "Close",
+			privacyNote: "Credentials are stored only in this plugin's own file; sign-in never reads other apps such as the codex CLI.",
+			requesting: "Requesting a one-time code…",
+			step1: "Open the sign-in link below",
+			step2: "Enter the one-time code",
+			step3: "This page continues automatically once you authorize",
+			linkExpires: "The one-time code is valid for 15 minutes",
+			open: "Open link",
+			copy: "Copy",
+			copied: "Copied",
+			waitingForAuth: "Waiting for authorization, keep this page open…",
+			loggedInDone: "Signed in. \"{name}\" now appears in the model picker.",
+			loggedInReady: "Signed in; the \"{name}\" provider is ready.",
+			expired: "The one-time code has expired. Please sign in again.",
+			loginFailed: "Sign-in failed: {message}",
+			loginButton: "Sign in with ChatGPT",
+			loginButtonAgain: "Sign in with a different account"
+		};
 		const css = [
-			".kino-sub-copy{color:var(--dsw-alias-label-secondary);font-size:14px;line-height:22px;margin:0 0 16px}",
-			".kino-sub-cards{display:flex;flex-direction:column;gap:10px}",
-			".kino-sub-card{border:1px solid var(--dsw-alias-border-l2,rgba(127,127,127,.25));border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;background:var(--dsw-alias-bg-module-platform,transparent)}",
-			".kino-sub-head{display:flex;align-items:center;gap:10px}",
-			".kino-sub-name{color:var(--dsw-alias-label-primary,#fff);font-size:14px;font-weight:500;line-height:22px}",
-			".kino-sub-tag{border:1px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));color:var(--dsw-alias-label-secondary,#ccc);border-radius:4px;flex:none;padding:1px 6px;font-size:11px;line-height:16px}",
-			".kino-sub-tag-ok{color:var(--dsw-alias-state-success-primary,#46a758);border-color:currentColor}",
-			".kino-sub-desc{color:var(--dsw-alias-label-tertiary,#999);font-size:13px;line-height:20px;margin:0}",
-			".kino-sub-actions{display:flex;align-items:center;gap:8px}",
-			".kino-codex-row{display:flex;align-items:center;gap:8px;margin:8px 0}",
-			".kino-codex-label{min-width:64px;font-size:13px;color:var(--dsw-alias-label-secondary)}",
-			".kino-codex-code{flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--dsw-alias-fill-secondary,rgba(127,127,127,.12));padding:6px 10px;border-radius:6px;overflow-wrap:anywhere}",
-			".kino-codex-usercode{flex:0 1 auto;font-size:15px;letter-spacing:.06em}",
-			".kino-codex-hint{font-size:13px;color:var(--dsw-alias-label-secondary);margin:8px 0 16px}",
-			".kino-codex-success{color:var(--dsw-alias-state-success-primary,#46a758);font-size:14px;line-height:22px;margin:0 0 12px}",
-			".kino-codex-error{color:var(--dsw-alias-state-error-primary,#e5484d);font-size:14px;line-height:22px;margin:0 0 12px}",
-			".kino-codex-btn{font:inherit;font-size:14px;padding:6px 14px;border-radius:6px;border:1px solid var(--dsw-alias-border,rgba(127,127,127,.35));background:var(--dsw-alias-fill,rgba(255,255,255,.04));color:var(--dsw-alias-label-primary,#fff);cursor:pointer}",
-			".kino-codex-btn:hover{border-color:var(--dsw-alias-label-secondary)}",
-			".kino-codex-primary{background:var(--dsw-alias-accent,rgba(99,126,255,.16))}",
-			".kino-codex-copy{color:var(--dsw-alias-label-secondary);font-size:14px;line-height:22px;margin:0 0 16px}"
+			".kino-sub-root{width:100%;max-width:720px;display:flex;flex-direction:column;gap:12px;color:var(--dsw-alias-label-primary)}",
+			".kino-sub-title{margin:0;font-size:16px;font-weight:500;line-height:24px}",
+			".kino-sub-copy{margin:0;color:var(--dsw-alias-label-tertiary);font-size:14px;line-height:22px}",
+			".kino-sub-cards{display:flex;flex-direction:column;gap:8px}",
+			".kino-sub-card{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;min-width:0}",
+			".kino-sub-head{display:flex;align-items:center;gap:10px;min-width:0}",
+			".kino-sub-icon{flex:none;width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-fill-tsp-secondary)}",
+			".kino-sub-name{flex:1;min-width:0;font-size:14px;font-weight:500;line-height:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+			".kino-sub-status{flex:none;display:inline-flex;align-items:center;gap:4px;border:1px solid var(--dsw-alias-border-l3);color:var(--dsw-alias-label-secondary);border-radius:999px;padding:1px 8px;font-size:11px;line-height:16px}",
+			".kino-sub-status-ok{color:var(--dsw-alias-state-success-primary);border-color:currentColor}",
+			".kino-sub-desc{margin:0;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:20px}",
+			".kino-sub-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}",
+			".kino-sub-file{display:flex;align-items:baseline;gap:8px;min-width:0}",
+			".kino-sub-file-label{flex:none;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}",
+			".kino-sub-file-path{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+			".kino-sub-hint{margin:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}",
+			".kino-sub-error{margin:0;color:var(--dsw-alias-state-error-primary);font-size:13px;line-height:20px}",
+			".kino-sub-error-row{display:flex;align-items:center;gap:8px;color:var(--dsw-alias-state-error-primary);font-size:13px;line-height:20px}",
+			".kino-sub-muted{display:flex;align-items:center;gap:8px;margin:0;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}",
+			".kino-sub-success{display:flex;align-items:center;gap:8px;margin:0;color:var(--dsw-alias-state-success-primary);font-size:14px;line-height:22px}",
+			".kino-sub-panel{display:flex;flex-direction:column;gap:14px;align-items:flex-start;min-width:0}",
+			".kino-sub-note{margin:0;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:20px}",
+			".kino-sub-steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:14px;width:100%}",
+			".kino-sub-step{display:flex;gap:10px;min-width:0}",
+			".kino-sub-step-no{flex:none;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-top:1px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-fill-tsp-secondary)}",
+			".kino-sub-step-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}",
+			".kino-sub-step-label{margin:0;font-size:13px;line-height:20px;color:var(--dsw-alias-label-primary)}",
+			".kino-sub-linkrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}",
+			".kino-sub-code{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:18px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-fill-tsp-secondary);border-radius:6px;padding:6px 10px;overflow-wrap:anywhere}",
+			".kino-sub-usercode{flex:0 1 auto;font-size:15px;letter-spacing:.06em}",
+			".kino-sub-waiting{display:flex;align-items:center;gap:8px;margin:0;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}"
 		].join("\n");
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=\"kino-subscriptions\"]") === null) {
 			const tag = document.createElement("style");
@@ -61,17 +172,29 @@ window.__ModuleLoader__.load({
 			if (!response.ok) throw new Error(body?.message ?? `HTTP ${response.status}`);
 			return body;
 		}
+		/** Shell-style copy button with one-second "copied" feedback. */
+		function CopyButton({ t, text }) {
+			const { copied, onCopy } = useCopyFeedback(text);
+			return h(Button, {
+				variant: "outline",
+				size: "sm",
+				icon: h(copied ? IconCheckOutline16 : IconCopyOutline16, { size: 12 }),
+				onClick: onCopy,
+				"aria-label": copied ? t("copied") : t("copy")
+			}, copied ? t("copied") : t("copy"));
+		}
 		/**
-		 * The device-login panel: the login button, the URL + one-time code
-		 * display with copy buttons, and automatic polling. Callers wrap it in
-		 * their own modal and get `onDone` when a login just succeeded.
+		 * The device-login panel: privacy note, the login button, a numbered
+		 * three-step guide with the URL + one-time code and copy buttons, and
+		 * automatic polling. Callers wrap it in their own modal and get
+		 * `onDone` shortly after a login succeeded.
 		 */
-		function LoginPanel(props) {
+		function LoginPanel({ t, name, onDone }) {
 			const [status, setStatus] = React.useState({ phase: "loading" });
 			const [login, setLogin] = React.useState({ phase: "idle" });
 			const mounted = React.useRef(true);
 			const pollTimer = React.useRef(void 0);
-			const onDone = props.onDone;
+			const doneTimer = React.useRef(void 0);
 			const stopPoll = () => {
 				if (pollTimer.current !== void 0) {
 					clearTimeout(pollTimer.current);
@@ -104,12 +227,11 @@ window.__ModuleLoader__.load({
 							return;
 						}
 						if (result.status === "success") {
-							setLogin({
-								phase: "success",
-								authFile: result.authFile
-							});
+							setLogin({ phase: "success" });
 							void refresh();
-							if (typeof onDone === "function") onDone();
+							if (typeof onDone === "function") {
+								doneTimer.current = setTimeout(onDone, 1200);
+							}
 							return;
 						}
 						if (result.status === "expired") {
@@ -149,66 +271,100 @@ window.__ModuleLoader__.load({
 				return () => {
 					mounted.current = false;
 					stopPoll();
+					if (doneTimer.current !== void 0) clearTimeout(doneTimer.current);
 				};
 			}, [refresh]);
-			const copy = async (text) => {
-				try {
-					await navigator.clipboard.writeText(text);
-				} catch {}
-			};
-			const h = React.createElement;
-			const button = (label, onClick, extra) => h("button", {
-				type: "button",
-				className: extra ?? "kino-codex-btn",
-				onClick
-			}, label);
-			return h("div", null, [
-				h("p", { className: "kino-codex-copy", key: "copy" }, "使用 ChatGPT / Codex 订阅账户登录,登录成功后「OpenAI 订阅」才会出现在模型选择器里。本插件只使用自己保存的凭据,不会读取 codex CLI 等其它程序的登录信息。"),
-				status.phase === "loading" ? h("p", { key: "body" }, "正在读取登录状态…") : status.phase === "error" ? h("p", {
-					className: "kino-codex-error",
-					key: "body"
-				}, `无法读取登录状态:${status.message}`) : login.phase === "starting" ? h("p", { key: "body" }, "正在申请一次性登录码…") : login.phase === "waiting" ? h("div", { key: "body" }, [
-					h("div", { className: "kino-codex-row", key: "url" }, [
-						h("span", { className: "kino-codex-label" }, "登录链接"),
-						h("code", { className: "kino-codex-code" }, login.verificationUrl),
-						button("复制", () => void copy(login.verificationUrl))
+			const content = [];
+			if (status.phase === "loading") {
+				content.push(h("p", { className: "kino-sub-muted", key: "body" }, [
+					h(StateDot, { state: "ongoing", size: 8 }),
+					t("checking")
+				]));
+			} else if (status.phase === "error") {
+				content.push(h("p", { className: "kino-sub-error", key: "body" }, t("statusError", { message: status.message })));
+			} else if (login.phase === "starting") {
+				content.push(h("p", { className: "kino-sub-muted", key: "body" }, [
+					h(StateDot, { state: "ongoing", size: 8 }),
+					t("requesting")
+				]));
+			} else if (login.phase === "waiting") {
+				content.push(h("ol", { className: "kino-sub-steps", key: "body" }, [
+					h("li", { className: "kino-sub-step", key: "url" }, [
+						h("span", { className: "kino-sub-step-no" }, "1"),
+						h("div", { className: "kino-sub-step-body" }, [
+							h("p", { className: "kino-sub-step-label" }, t("step1")),
+							h("div", { className: "kino-sub-linkrow" }, [
+								h("code", { className: "kino-sub-code", title: login.verificationUrl }, login.verificationUrl),
+								h(CopyButton, { t, text: login.verificationUrl }),
+								h(Button, {
+									variant: "outline",
+									size: "sm",
+									icon: h(IconRightUpOutline16, { size: 14 }),
+									onClick: () => window.open(login.verificationUrl, "_blank", "noopener,noreferrer")
+								}, t("open"))
+							])
+						])
 					]),
-					h("div", { className: "kino-codex-row", key: "code" }, [
-						h("span", { className: "kino-codex-label" }, "一次性码"),
-						h("code", { className: "kino-codex-code kino-codex-usercode" }, login.userCode),
-						button("复制", () => void copy(login.userCode))
+					h("li", { className: "kino-sub-step", key: "code" }, [
+						h("span", { className: "kino-sub-step-no" }, "2"),
+						h("div", { className: "kino-sub-step-body" }, [
+							h("p", { className: "kino-sub-step-label" }, t("step2")),
+							h("div", { className: "kino-sub-linkrow" }, [
+								h("code", { className: "kino-sub-code kino-sub-usercode" }, login.userCode),
+								h(CopyButton, { t, text: login.userCode })
+							]),
+							h("p", { className: "kino-sub-hint" }, t("linkExpires"))
+						])
 					]),
-					h("p", { className: "kino-codex-hint", key: "hint" }, "在浏览器里打开链接并输入一次性码(15 分钟内有效)。完成后此页面会自动继续。")
-				]) : login.phase === "success" ? h("p", {
-					className: "kino-codex-success",
-					key: "body"
-				}, `✓ 登录成功,凭据已保存到 ${login.authFile}。「OpenAI 订阅」现已出现在模型选择器里。`) : login.phase === "expired" ? h("div", { key: "body" }, [
-					h("p", { className: "kino-codex-error" }, "一次性码已过期,请重新登录。"),
-					button("重新登录", () => void start())
-				]) : login.phase === "error" ? h("div", { key: "body" }, [
-					h("p", { className: "kino-codex-error" }, `登录失败:${login.message}`),
-					button("重试", () => void start())
-				]) : status.loggedIn === true ? h("p", {
-					className: "kino-codex-success",
-					key: "body"
-				}, "✓ 已登录,「OpenAI 订阅」提供商已就绪。") : button("使用 ChatGPT 账号登录", () => void start(), "kino-codex-btn kino-codex-primary")
-			]);
+					h("li", { className: "kino-sub-step", key: "sync" }, [
+						h("span", { className: "kino-sub-step-no" }, "3"),
+						h("div", { className: "kino-sub-step-body" }, [
+							h("p", { className: "kino-sub-step-label" }, t("step3")),
+							h("p", { className: "kino-sub-waiting" }, [
+								h(StateDot, { state: "ongoing", size: 8 }),
+								t("waitingForAuth")
+							])
+						])
+					])
+				]));
+			} else if (login.phase === "success") {
+				content.push(h("p", { className: "kino-sub-success", key: "body" }, [
+					h(IconCheckOutline16),
+					t("loggedInDone", { name })
+				]));
+			} else if (login.phase === "expired") {
+				content.push(h("p", { className: "kino-sub-error", key: "body" }, t("expired")));
+				content.push(h(Button, { variant: "primary", size: "md", key: "retry", onClick: () => void start() }, t("relogin")));
+			} else if (login.phase === "error") {
+				content.push(h("p", { className: "kino-sub-error", key: "body" }, t("loginFailed", { message: login.message })));
+				content.push(h(Button, { variant: "primary", size: "md", key: "retry", onClick: () => void start() }, t("retry")));
+			} else {
+				content.push(h("p", { className: "kino-sub-note", key: "note" }, t("privacyNote")));
+				if (status.loggedIn === true) {
+					content.push(h("p", { className: "kino-sub-success", key: "ready" }, [
+						h(IconCheckOutline16),
+						t("loggedInReady", { name })
+					]));
+				}
+				content.push(h(Button, {
+					variant: "primary",
+					size: "md",
+					icon: h(IconUserOutline16),
+					key: "cta",
+					onClick: () => void start()
+				}, t(status.loggedIn === true ? "loginButtonAgain" : "loginButton")));
+			}
+			return h("div", { className: "kino-sub-panel" }, content);
 		}
 		/**
 		 * One provider card in the hub. `wired` providers offer the shared
-		 * login modal; un-wired ones show a "coming soon" tag.
+		 * login modal; un-wired ones show a "coming soon" hint.
 		 */
-		function ProviderCard(props) {
-			const { provider, loggedIn, authFile, onChanged } = props;
+		function ProviderCard({ t, provider, loggedIn, authFile, onChanged }) {
 			const [open, setOpen] = React.useState(false);
 			const [busy, setBusy] = React.useState(false);
 			const [error, setError] = React.useState("");
-			const h = React.createElement;
-			const button = (label, onClick, extra) => h("button", {
-				type: "button",
-				className: extra ?? "kino-codex-btn",
-				onClick
-			}, label);
+			const wired = provider.wired === true;
 			const logout = async () => {
 				setBusy(true);
 				setError("");
@@ -221,25 +377,56 @@ window.__ModuleLoader__.load({
 					setBusy(false);
 				}
 			};
+			const icons = {
+				codex: h(IconSparkle16),
+				anthropic: h(IconUserOutline16),
+				volcano: h(IconGlobeOutline14)
+			};
 			return h("div", { className: "kino-sub-card" }, [
 				h("div", { className: "kino-sub-head", key: "head" }, [
-					h("span", { className: "kino-sub-name" }, provider.name),
-					provider.wired === true && loggedIn === true ? h("span", { className: "kino-sub-tag kino-sub-tag-ok" }, "已登录") : provider.wired !== true ? h("span", { className: "kino-sub-tag" }, "即将支持") : h("span", { className: "kino-sub-tag" }, "未登录")
+					h("span", { className: "kino-sub-icon", "aria-hidden": "true" }, icons[provider.id]),
+					h("span", { className: "kino-sub-name" }, t(provider.nameKey)),
+					h("span", {
+						className: wired && loggedIn === true ? "kino-sub-status kino-sub-status-ok" : "kino-sub-status"
+					}, [
+						wired && loggedIn === true ? h(IconCheckOutline16, { size: 12, "aria-hidden": "true" }) : null,
+						t(wired ? (loggedIn === true ? "statusLoggedIn" : "statusLoggedOut") : "statusComingSoon")
+					])
 				]),
-				h("p", { className: "kino-sub-desc", key: "desc" }, provider.description),
-				provider.wired === true ? h("div", { className: "kino-sub-actions", key: "actions" }, [
-					button(loggedIn === true ? "重新登录" : "登录", () => setOpen(true), "kino-codex-btn kino-codex-primary"),
-					loggedIn === true ? button(busy ? "退出中…" : "退出登录", () => void logout()) : null,
-					loggedIn === true ? h("span", { className: "kino-sub-desc", style: { overflowWrap: "anywhere", fontSize: "12px" } }, authFile ?? "") : null
+				h("p", { className: "kino-sub-desc", key: "desc" }, t(provider.descKey)),
+				wired ? h("div", { className: "kino-sub-actions", key: "actions" }, [
+					h(Button, {
+						variant: "primary",
+						size: "md",
+						icon: h(IconUserOutline16),
+						onClick: () => setOpen(true)
+					}, t(loggedIn === true ? "relogin" : "login")),
+					loggedIn === true ? h(Button, {
+						variant: "outline",
+						size: "md",
+						disabled: busy,
+						onClick: () => void logout()
+					}, t(busy ? "loggingOut" : "logout")) : null
+				]) : h("p", { className: "kino-sub-hint", key: "hint" }, t("comingSoonHint")),
+				loggedIn === true && typeof authFile === "string" && authFile !== "" ? h("div", {
+					className: "kino-sub-file",
+					key: "file",
+					title: authFile
+				}, [
+					h("span", { className: "kino-sub-file-label" }, t("credentialFile")),
+					h("code", { className: "kino-sub-file-path" }, authFile)
 				]) : null,
-				error !== "" ? h("p", { className: "kino-codex-error", key: "error", style: { margin: 0 } }, error) : null,
-				open ? h(Primitives.Modal, {
+				error !== "" ? h("p", { className: "kino-sub-error", key: "error" }, error) : null,
+				open ? h(Modal, {
 					key: "modal",
 					open: true,
 					onClose: () => setOpen(false),
-					title: `登录 ${provider.name}`,
-					closeLabel: "关闭"
+					title: t("modalTitle", { name: t(provider.nameKey) }),
+					description: t("modalDesc"),
+					closeLabel: t("close")
 				}, h(LoginPanel, {
+					t,
+					name: t(provider.nameKey),
 					onDone: () => {
 						setOpen(false);
 						onChanged?.();
@@ -248,7 +435,8 @@ window.__ModuleLoader__.load({
 			]);
 		}
 		/** The hub page content. */
-		function SubscriptionsSection() {
+		function SubscriptionsSection({ t, subscribeLocale }) {
+			const [, force] = React.useReducer((value) => value + 1, 0);
 			const [state, setState] = React.useState({ phase: "loading" });
 			const refresh = React.useCallback(async () => {
 				try {
@@ -266,50 +454,48 @@ window.__ModuleLoader__.load({
 				}
 			}, []);
 			React.useEffect(() => {
+				const unsubscribe = subscribeLocale(force);
 				void refresh();
-			}, [refresh]);
-			const h = React.createElement;
+				return unsubscribe;
+			}, [subscribeLocale, refresh]);
 			const providers = [
-				{
-					id: "codex",
-					name: "OpenAI 订阅",
-					description: "ChatGPT / Codex 订阅账户,提供 GPT 系列模型。登录成功后自动出现在「模型」页与模型选择器。",
-					wired: true
-				},
-				{
-					id: "anthropic",
-					name: "Anthropic 订阅",
-					description: "Claude 系列模型。登录流程待接入。",
-					wired: false
-				},
-				{
-					id: "volcano",
-					name: "火山方舟 Coding Plan",
-					description: "豆包 / 深度求索系列模型。登录流程待接入。",
-					wired: false
-				}
+				{ id: "codex", nameKey: "openaiName", descKey: "openaiDesc", wired: true },
+				{ id: "anthropic", nameKey: "anthropicName", descKey: "anthropicDesc", wired: false },
+				{ id: "volcano", nameKey: "volcanoName", descKey: "volcanoDesc", wired: false }
 			];
-			return h("div", null, [
-				h("p", { className: "kino-sub-copy", key: "copy" }, "在这里管理第三方订阅服务:登录成功后,对应服务才会出现在「模型」页;退出登录后即从「模型」页移除。模型与思考深度在「模型」页的服务行里设置。"),
-				state.phase === "error" ? h("p", { className: "kino-codex-error", key: "error" }, `无法读取登录状态:${state.message}`) : null,
-				h("div", { className: "kino-sub-cards", key: "cards" }, providers.map((provider) => {
-					const props = {
-						provider,
-						loggedIn: provider.wired === true && state.loggedIn === true,
-						authFile: state.authFile,
-						onChanged: () => void refresh()
-					};
-					return h(ProviderCard, { ...props, key: provider.id });
-				}))
+			return h("div", { className: "kino-sub-root" }, [
+				h("h3", { className: "kino-sub-title", key: "title" }, t("nav")),
+				h("p", { className: "kino-sub-copy", key: "copy" }, t("intro")),
+				state.phase === "loading" ? h("p", { className: "kino-sub-muted", key: "loading" }, [
+					h(StateDot, { state: "ongoing", size: 8 }),
+					t("checking")
+				]) : null,
+				state.phase === "error" ? h("div", { className: "kino-sub-error-row", key: "error" }, [
+					h(IconWarningOutline16, { "aria-hidden": "true" }),
+					h("span", null, t("statusError", { message: state.message })),
+					h(Button, { variant: "outline", size: "sm", onClick: () => void refresh() }, t("retry"))
+				]) : null,
+				state.phase === "ready" ? h("div", { className: "kino-sub-cards", key: "cards" }, providers.map((provider) => h(ProviderCard, {
+					key: provider.id,
+					t,
+					provider,
+					loggedIn: provider.wired === true && state.loggedIn === true,
+					authFile: state.authFile,
+					onChanged: () => void refresh()
+				}))) : null
 			]);
 		}
 		function apply(ctx) {
+			ctx.effect(() => ctx.locale.register(NS, { zh, en }), "kino-codex: subscription dictionaries");
+			const t = ctx.locale.bind(NS);
+			const subscribeLocale = (listener) => ctx.locale.subscribe(listener);
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
 				name: "settings.section",
 				id: "third-party-subscriptions",
 				order: 20,
-				label: () => "第三方订阅",
-				inject: () => ({})
+				label: () => t("nav"),
+				locale: NS,
+				inject: () => ({ t, subscribeLocale })
 			}, SubscriptionsSection));
 		}
 		return { apply, inject };
