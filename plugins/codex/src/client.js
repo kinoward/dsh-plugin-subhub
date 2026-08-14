@@ -8,7 +8,7 @@ window.__ModuleLoader__.load({
 	id: "kino-dsh-plugins/codex",
 	factory: (require) => {
 		const React = require("react");
-		const inject = ["@deepseek-ai/dsh-client-runtime"];
+		const inject = ["slots"];
 		const API = "/api/kino-codex";
 		const POLL_MS = 2500;
 		const css = [
