@@ -47,6 +47,16 @@ function reasoningEffort(effort) {
 	throw new LlmError(`Codex models do not support reasoning effort "${effort}"`, "UNSUPPORTED_REASONING_EFFORT");
 }
 /**
+ * Map a harness-facing effort id to the Responses API wire value. The model
+ * catalog advertises "ultra" as a capability level, but the wire endpoint
+ * rejects it (valid: none/minimal/low/medium/high/xhigh/max) — the official
+ * codex CLI maps Ultra to Max on the wire, and this adapter does the same.
+ */
+function wireReasoningEffort(effort) {
+	const valid = reasoningEffort(effort);
+	return valid === "ultra" ? "max" : valid;
+}
+/**
  * Serialize the conversation into Responses API input items. Assistant text
  * becomes a message item and every assistant tool call becomes its own flat
  * `function_call` item (the Codex backend rejects the public API's embedded
@@ -116,7 +126,7 @@ function serializeRequest(options) {
 		input: serializeInput(options.messages),
 		...tools !== void 0 && tools.length > 0 ? { tools } : {},
 		...options.temperature !== void 0 ? { temperature: options.temperature } : {},
-		...options.reasoningEffort !== void 0 ? { reasoning: { effort: reasoningEffort(options.reasoningEffort) } } : {}
+		...options.reasoningEffort !== void 0 ? { reasoning: { effort: wireReasoningEffort(options.reasoningEffort) } } : {}
 	};
 }
 //#endregion
