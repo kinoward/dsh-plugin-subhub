@@ -29,7 +29,7 @@
 
 ## 使用
 
-登录完成后,在 DeepSeek Harness 的模型选择器里把提供商切到「OpenAI 订阅」,再选一个模型即可。在线时显示你的账户可用模型;拉取失败时回退到静态备用模型(gpt-5.6-sol、gpt-5.6-terra、gpt-5.5、gpt-5.4、gpt-5.3-codex-spark)。
+登录完成后,在 DeepSeek Harness 的模型选择器里把提供商切到「OpenAI 订阅」,再选一个模型即可。在线时显示你的账户可用模型;拉取失败时回退到静态备用模型(gpt-5.6-sol、gpt-5.6-terra、gpt-5.6-luna、gpt-5.5、gpt-5.4、gpt-5.4-mini、gpt-5.3-codex-spark)。
 
 **设置模型与思考深度**:在「模型」页的「OpenAI 订阅」服务行点「编辑」可配置备用模型列表(`models`)、默认思考深度(`defaultReasoningEffort`)等;单次会话的模型与思考深度在模型选择器里随时切换(可选 `low` / `medium` / `high`)。
 
@@ -73,4 +73,4 @@
 
 ## 重要说明
 
-Codex 后端是官方 codex CLI 使用的内部 API,非公开 API,可能随 OpenAI 调整而变化;订阅配额与限速由你的 ChatGPT/Codex 订阅决定。
+Codex 后端是官方 codex CLI 使用的内部 API,非公开 API,可能随 OpenAI 调整而变化;订阅配额与限速由你的 ChatGPT/Codex 订阅决定。实现参考了官方 codex CLI 与 opencode 开源项目的 ChatGPT 登录流程与模型配置(各模型族的上下文窗口等元数据与 opencode 的 codex 插件保持一致)。

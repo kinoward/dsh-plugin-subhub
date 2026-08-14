@@ -31,10 +31,16 @@ function decodeJwtPayload(token) {
 	if (part === void 0) return void 0;
 	return JSON.parse(Buffer.from(part, "base64url").toString("utf8"));
 }
-/** The ChatGPT account id lives in the id_token's openai auth claims. */
+/**
+ * The ChatGPT account id lives in the id_token claims (top-level or inside
+ * the openai auth namespace); claim shapes follow the official codex CLI and
+ * opencode's extraction logic.
+ */
 function accountIdFromIdToken(idToken) {
 	try {
-		const auth = decodeJwtPayload(idToken)?.["https://api.openai.com/auth"];
+		const claims = decodeJwtPayload(idToken);
+		if (typeof claims?.chatgpt_account_id === "string") return claims.chatgpt_account_id;
+		const auth = claims?.["https://api.openai.com/auth"];
 		if (typeof auth?.chatgpt_account_id === "string") return auth.chatgpt_account_id;
 		if (typeof auth?.chatgpt_user_id === "string") return auth.chatgpt_user_id;
 	} catch {}
