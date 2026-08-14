@@ -719,24 +719,31 @@ function modelInfo(provider, model) {
 }
 /**
  * The proactive-delegation directive injected while ultra effort is selected
- * AND the agent carries a subagent tool. This mirrors the official codex
+ * AND the agent carries delegation tools (subagent / workflow — both mounted
+ * by the agent preset for every model and effort, per the harness tool
+ * assembly, which never filters by model). This mirrors the official codex
  * CLI's Ultra behavior (max reasoning + MultiAgentMode::Proactive): the
  * runtime cannot split tasks itself, so the model is instructed to drive the
- * harness's own subagent tools — the closest native equivalent.
+ * harness's own delegation tools — the closest native equivalent. The
+ * directive only references tools actually present in the request.
  */
-const ULTRA_DELEGATION_DIRECTIVE = [
-	"ULTRA MODE — PROACTIVE TASK DELEGATION",
-	"Reasoning depth is already at maximum. To make the most of it, delegate proactively:",
-	"- Decompose the task into independent subtasks; for every subtask that can run autonomously, launch a background subagent (subagent tool) with a complete, standalone prompt.",
-	"- Start independent subagents in parallel instead of one after another.",
-	"- Collect and verify every subagent result yourself; never delegate final integration, decisions, or the final answer.",
-	"- Do not delegate subtasks that need the whole conversation context."
-].join("\n");
 function applyUltraDelegationDirective(options) {
 	if (options.reasoningEffort !== "ultra") return options;
-	const hasDelegationTool = Array.isArray(options.tools) && options.tools.some((tool) => tool.name === "subagent" || tool.name === "subagent_fork");
-	if (!hasDelegationTool) return options;
-	const system = options.system === void 0 || options.system === "" ? ULTRA_DELEGATION_DIRECTIVE : `${options.system}\n\n${ULTRA_DELEGATION_DIRECTIVE}`;
+	if (!Array.isArray(options.tools)) return options;
+	const hasSubagents = options.tools.some((tool) => tool.name === "subagent" || tool.name === "subagent_fork");
+	const hasWorkflow = options.tools.some((tool) => tool.name === "workflow");
+	if (!hasSubagents && !hasWorkflow) return options;
+	const lines = [
+		"ULTRA MODE — PROACTIVE TASK DELEGATION",
+		"Reasoning depth is already at maximum. To make the most of it, delegate proactively:",
+		"- Decompose the task into independent subtasks."
+	];
+	if (hasSubagents) lines.push("- For every subtask that can run autonomously, launch a background subagent (subagent tool) with a complete, standalone prompt. Start independent subagents in parallel.");
+	if (hasWorkflow) lines.push("- For work that fans out over many independent pieces, use the workflow tool to run them concurrently.");
+	lines.push("- Collect and verify every delegated result yourself; never delegate final integration, decisions, or the final answer.");
+	lines.push("- Do not delegate subtasks that need the whole conversation context.");
+	const directive = lines.join("\n");
+	const system = options.system === void 0 || options.system === "" ? directive : `${options.system}\n\n${directive}`;
 	return system === options.system ? options : { ...options, system };
 }
 /**
