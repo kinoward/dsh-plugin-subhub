@@ -76,7 +76,6 @@ window.__ModuleLoader__.load({
 			contextTag: "上下文 {value}",
 			imageTag: "支持图片",
 			reasoningTag: "推理 {names}",
-			defaultTag: "默认 {name}",
 			expand: "展开",
 			collapse: "收起"
 		};
@@ -124,7 +123,6 @@ window.__ModuleLoader__.load({
 			contextTag: "Context {value}",
 			imageTag: "Image input",
 			reasoningTag: "Reasoning {names}",
-			defaultTag: "Default {name}",
 			expand: "Expand",
 			collapse: "Collapse"
 		};
@@ -267,8 +265,6 @@ window.__ModuleLoader__.load({
 			const efforts = model.reasoning !== void 0 && model.reasoning !== null && Array.isArray(model.reasoning.efforts) ? model.reasoning.efforts : [];
 			if (efforts.length > 0) {
 				tags.push(t("reasoningTag", { names: efforts.map((effort) => effort.name).join(" / ") }));
-				const def = typeof model.reasoning.defaultEffort === "string" ? efforts.find((effort) => effort.id === model.reasoning.defaultEffort) : void 0;
-				if (def !== void 0) tags.push(t("defaultTag", { name: def.name }));
 			}
 			if (tags.length > 0) {
 				const meta = document.createElement("div");
