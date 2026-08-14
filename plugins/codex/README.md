@@ -12,16 +12,19 @@
 
 ## 登录
 
-二选一:
+三种方式,任选其一:
 
-1. **官方 codex CLI 已登录过**:插件直接读 `~/.codex/auth.json`,无需额外操作。
-2. **运行随包登录脚本**(设备码流程):
+1. **网页设置面板(推荐,无需安装任何东西)**:打开 DeepSeek Harness 的设置面板,进入 **Codex** 分区,点「使用 ChatGPT 账号登录」。页面会显示登录链接和一次性码(可一键复制);在浏览器里打开链接、输入一次性码后,页面会自动完成登录。全程在设备码流程内,凭据只落在本机,页面上永远看不到 token。
+2. **官方 codex CLI 已登录过**:插件直接读 `~/.codex/auth.json`,无需额外操作。
+3. **运行随包登录脚本**(无头 profile 或偏好终端的用户):
 
    ```sh
    node plugins/codex/login.js
    ```
 
    脚本会打印一个链接和一次性码;在浏览器打开链接、输入码完成登录后,默认把凭据写到 `~/.kino-dsh/codex-auth.json`。可用 `--auth-file <路径>` 覆盖保存位置;文件权限为 0600。
+
+> 读取优先级:插件先读 `~/.codex/auth.json`,不存在时读 `~/.kino-dsh/codex-auth.json`。网页与脚本登录都写入 `~/.kino-dsh/codex-auth.json`(除非 `authFile` 显式指定),不会动 codex CLI 自己的文件。
 
 ## 使用
 

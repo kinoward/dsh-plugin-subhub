@@ -7,7 +7,8 @@
   "exports": {
     ".": "./index.js",
     "./hello": "./plugins/hello/src/index.js",
-    "./codex": "./plugins/codex/src/index.js"
+    "./codex": "./plugins/codex/src/index.js",
+    "./codex/package.json": "./plugins/codex/package.json"
   },
   "files": [
     "index.js",

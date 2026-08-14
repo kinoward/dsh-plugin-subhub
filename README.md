@@ -27,7 +27,7 @@ kino-ds-harness-plugin/
 
 ### Codex 快速上手
 
-1. 登录二选一:已用官方 codex CLI 登录过(插件读 `~/.codex/auth.json`);或运行 `node plugins/codex/login.js` 完成设备码登录。
+1. 打开设置面板的 **Codex** 分区,点「使用 ChatGPT 账号登录」,按页面提示在浏览器里输入一次性码即可(已装 codex CLI 并登录过的用户可跳过这一步)。
 2. 登录后在模型选择器里选 Codex 提供商即可使用。详见 [`plugins/codex/README.md`](plugins/codex/README.md)。
 
 ## 快速使用

@@ -32,21 +32,24 @@ dsh --profile demo
   dsh --profile web --patch ./cordis.patch.yml --dump-config
   ```
 
-## codex 插件:登录脚本与验证
+## codex 插件:登录与验证
 
-`kino-codex` 用 Codex 订阅账户调用 GPT 模型,需要先登录。试用或开发时,运行随包脚本完成设备码登录:
+`kino-codex` 用 Codex 订阅账户调用 GPT 模型,需要先登录。普通用户在 web 设置面板的 **Codex** 分区点「使用 ChatGPT 账号登录」即可(页面展示链接与一次性码、自动完成);无头 profile 或偏好终端时运行随包脚本:
 
 ```sh
 node plugins/codex/login.js
 ```
 
-脚本会打印一个链接和一次性码,在浏览器打开链接、输入码后,默认把凭据写到 `~/.kino-dsh/codex-auth.json`(权限 0600)。已用官方 codex CLI 登录过的,插件会直接读 `~/.codex/auth.json`,无需再运行脚本。
+脚本会打印一个链接和一次性码,在浏览器打开链接、输入码后,默认把凭据写到 `~/.kino-dsh/codex-auth.json`(权限 0600)。已用官方 codex CLI 登录过的,插件会直接读 `~/.codex/auth.json`,无需再登录。
+
+插件同时带客户端半边:登录 API 是宿主插件注册的 `webServer` 前缀路由(`/api/kino-codex/*`,只接受本机同源请求),设置页 UI 是 `plugins/codex/src/client.js`(手写模块加载器格式),由 `plugins/codex/package.json` 的 `dsh.client` 声明并随 `settings.section` 插槽挂进设置面板。
 
 验证要点:
 
 - 登录后启动 harness,在模型选择器里应能看到 Codex 提供商及其模型;
+- 登录 API 可用 curl 检查:`GET /api/kino-codex/login/status` 应返回 `{ok:true,loggedIn:...}`;
 - 若模型列表接口不可用,会回退到静态备用模型(gpt-5.6-sol、gpt-5.6-terra、gpt-5.5、gpt-5.4、gpt-5.3-codex-spark);
-- 鉴权文件权限应为 0600、不要提交进 git;token 不会打印到日志或终端。
+- 鉴权文件权限应为 0600、不要提交进 git;token 不会打印到日志或终端,也不会经过登录 API 回传浏览器。
 
 ## 新增插件
 

@@ -1,0 +1,16 @@
+{
+  "name": "kino-dsh-plugins/codex",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./client": "./src/client.js"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ]
+    }
+  }
+}

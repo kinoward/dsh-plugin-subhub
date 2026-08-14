@@ -16,6 +16,7 @@ import { CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, CallId, LlmAdapter, 
 import { deepEqualJson, installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { MAX_TIMER_DELAY_MS, idleWatchdog, timeoutOf } from "@deepseek-ai/dsh-timeout";
 import { EventSourceParserStream } from "eventsource-parser/stream";
+import { authFilePayload, exchangeAuthorizationCode, pollAuthorizationOnce, requestUserCode } from "./device-flow.js";
 //#region serialize: harness messages -> Responses API input
 /** Join the text blocks of a message (used for user/tool-result content). */
 function flattenText(blocks) {
@@ -402,6 +403,23 @@ class CodexTokenStore {
 		if (existsSync(codexFile)) return codexFile;
 		return join(homedir(), ".kino-dsh", "codex-auth.json");
 	}
+	/**
+	 * The file NEW logins are written to. Never the codex CLI's own file
+	 * unless the user pointed `authFile` at it explicitly.
+	 */
+	writeFilePath() {
+		const config = this.options();
+		if (config.authFile !== void 0 && config.authFile.trim() !== "") return config.authFile.trim();
+		return join(homedir(), ".kino-dsh", "codex-auth.json");
+	}
+	/** Whether any usable credential (tokens or API key) is on disk. */
+	hasTokens() {
+		const file = this.readFile(this.authFilePath());
+		if (file === void 0) return false;
+		if (typeof file.OPENAI_API_KEY === "string" && file.OPENAI_API_KEY.length > 0) return true;
+		const tokens = file.tokens;
+		return tokens !== void 0 && typeof tokens.access_token === "string" && tokens.access_token.length > 0;
+	}
 	readFile(path) {
 		try {
 			return JSON.parse(readFileSync(path, "utf8"));
@@ -750,6 +768,146 @@ var CodexAdapter = class extends LlmAdapter {
 	}
 };
 //#endregion
+//#region login api: browser-side device login through the web server
+/** API prefix the client settings page talks to (same-origin fetch). */
+const LOGIN_API_PATH = "/api/kino-codex";
+/** Browser-trust fence: same-origin requests only (DNS-rebinding + CSRF guard). */
+function isTrustedRequest(req) {
+	const host = req.headers.host ?? "";
+	if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host)) return false;
+	const origin = req.headers.origin;
+	if (origin === void 0) return true;
+	let hostname;
+	try {
+		hostname = new URL(origin).hostname;
+	} catch {
+		return false;
+	}
+	return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
+}
+/** Read a small JSON body, rejecting oversized or malformed input. */
+function readJsonBody(req) {
+	return new Promise((resolve, reject) => {
+		const chunks = [];
+		let size = 0;
+		req.on("data", (chunk) => {
+			size += chunk.length;
+			if (size > 65536) {
+				reject(new Error("request body too large"));
+				req.destroy();
+				return;
+			}
+			chunks.push(chunk);
+		});
+		req.on("end", () => {
+			if (chunks.length === 0) {
+				resolve({});
+				return;
+			}
+			try {
+				resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+			} catch (error) {
+				reject(error);
+			}
+		});
+		req.on("error", reject);
+	});
+}
+function sendJson(res, status, payload) {
+	const body = JSON.stringify(payload);
+	res.writeHead(status, {
+		"content-type": "application/json",
+		"content-length": Buffer.byteLength(body)
+	});
+	res.end(body);
+}
+/**
+ * Owns the one pending device-login flow and answers the settings page's
+ * login API. Token values never cross the wire: the browser only ever sees
+ * the public verification URL / one-time code and plain status results.
+ */
+function createLoginController(tokenStore, logger) {
+	let pending;
+	return {
+		hasPending: () => pending !== void 0,
+		async handle(req, res) {
+			if (!isTrustedRequest(req)) {
+				sendJson(res, 403, {
+					ok: false,
+					code: "forbidden",
+					message: "forbidden"
+				});
+				return;
+			}
+			const url = new URL(req.url ?? "/", "http://localhost");
+			const path = url.pathname;
+			try {
+				if (path === `${LOGIN_API_PATH}/login/status` && req.method === "GET") {
+					sendJson(res, 200, {
+						ok: true,
+						loggedIn: tokenStore.hasTokens(),
+						authFile: tokenStore.writeFilePath(),
+						pending: pending !== void 0
+					});
+					return;
+				}
+				if (path === `${LOGIN_API_PATH}/login/start` && req.method === "POST") {
+					const flow = await requestUserCode();
+					pending = flow;
+					sendJson(res, 200, {
+						ok: true,
+						verificationUrl: flow.verificationUrl,
+						userCode: flow.userCode,
+						expiresAtMs: flow.expiresAtMs
+					});
+					return;
+				}
+				if (path === `${LOGIN_API_PATH}/login/poll` && req.method === "POST") {
+					if (pending === void 0) {
+						sendJson(res, 200, {
+							ok: false,
+							code: "no-pending",
+							message: "no login in progress"
+						});
+						return;
+					}
+					const poll = await pollAuthorizationOnce(pending.deviceAuthId, pending.userCode, pending.expiresAtMs);
+					if (poll.status === "pending") {
+						sendJson(res, 200, { status: "pending" });
+						return;
+					}
+					if (poll.status === "expired") {
+						pending = void 0;
+						sendJson(res, 200, { status: "expired" });
+						return;
+					}
+					const tokens = await exchangeAuthorizationCode(poll.authorizationCode, poll.codeVerifier);
+					const target = tokenStore.writeFilePath();
+					tokenStore.persist(target, authFilePayload(tokens));
+					pending = void 0;
+					sendJson(res, 200, {
+						status: "success",
+						authFile: target
+					});
+					return;
+				}
+				sendJson(res, 404, {
+					ok: false,
+					code: "not-found",
+					message: "not found"
+				});
+			} catch (error) {
+				logger?.warn(`codex: login api failed: ${error?.message ?? error}`);
+				sendJson(res, 500, {
+					ok: false,
+					code: "error",
+					message: error?.message ?? String(error)
+				});
+			}
+		}
+	};
+}
+//#endregion
 //#region plugin: register the provider route
 const name = "codex";
 const inject = ["llm"];
@@ -864,6 +1022,18 @@ function apply(ctx, config) {
 			current = source;
 		},
 		onChange: ensureRegistrationFacts
+	});
+	// Browser-side login API (web profiles only): the settings page's Codex
+	// section drives the device-code flow through these routes. The webserver
+	// service can mount after this row, so the route rides its own inject
+	// scope and appears whenever the service does.
+	const login = createLoginController(tokenStore, ctx.logger);
+	ctx.inject(["webServer"], (webCtx) => {
+		webCtx.effect(() => webCtx.webServer.register({
+			kind: "prefix",
+			path: LOGIN_API_PATH,
+			handler: (req, res) => void login.handle(req, res)
+		}), "codex: login api route");
 	});
 }
 //#endregion
