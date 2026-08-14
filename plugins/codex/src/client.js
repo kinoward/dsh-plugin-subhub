@@ -24,7 +24,7 @@ window.__ModuleLoader__.load({
 			IconSparkle16,
 			IconUserOutline16,
 			IconWarningOutline16,
-			useCopyFeedback
+			writeClipboard
 		} = require("@deepseek-ai/dsh-client-ui-primitives");
 		const inject = ["slots", "locale"];
 		const API = "/api/kino-codex";
@@ -174,7 +174,15 @@ window.__ModuleLoader__.load({
 		}
 		/** Shell-style copy button with one-second "copied" feedback. */
 		function CopyButton({ t, text }) {
-			const { copied, onCopy } = useCopyFeedback(text);
+			const [copied, setCopied] = React.useState(false);
+			const onCopy = React.useCallback(() => {
+				if (copied) return;
+				writeClipboard(text).then((ok) => {
+					if (!ok) return;
+					setCopied(true);
+					window.setTimeout(() => setCopied(false), 1000);
+				});
+			}, [copied, text]);
 			return h(Button, {
 				variant: "outline",
 				size: "sm",
