@@ -33,6 +33,8 @@
 
 **设置思考深度**:在「模型」页的「OpenAI 订阅」服务行点「编辑」可配置默认上下文窗口、默认思考深度(`defaultReasoningEffort`)等;单次会话的模型与思考深度在模型选择器里随时切换。可选档位由模型接口**动态下发、不写死**:每个模型展示它自己支持的档位(如 gpt-5.6-sol 支持 `low`~`ultra` 六档,gpt-5.5 支持 `low`~`xhigh` 四档),默认档也取自接口。注意:`ultra` 在发送到后端时会映射为 `max`(线上端点不直接接受 ultra,与官方 codex CLI 的做法一致),选择器里仍显示 Ultra。**ultra 的真实含义**:官方 CLI 里 Ultra = max 推理 + 代理层切换到主动多智能体模式(自动任务委派,见 codex-rs `multi_agents.rs`:Ultra → `MultiAgentMode::Proactive`);模型侧推理上限就是 max。在本平台,插件实现了等价机制(**ultra 自动委派**):选择 ultra 档且会话中存在 subagent 工具时,每次请求会自动在系统提示里注入主动委派指令——模型把独立子任务拆解后交给后台 subagent 并行执行、自己负责收集验证与最终汇总(对应官方 CLI 的 Ultra → 主动多智能体模式)。**注意:子代理调用与思考深度无关**——subagent 工具对所有模型、所有档位都可用(它们由 agent 预设无条件挂载,harness 的工具装配不按模型或档位过滤);任何档位下模型都可以按需调用子代理,ultra 只是把委派升级为主动并行模式,并不是委派能力的开关。
 
+**图片输入(多模态)**:支持上传图片。图片先经 harness 附件服务保存,发送时插件从附件服务读出字节、编码为 data URL,作为 Responses API 的 `input_image` 内容块随用户消息一起发出(经真实后端探测验证:后端接受字符串形式的 data URL,不接受对象形式)。**能力声明同样动态下发、不写死**:每个模型是否接受图片取自你账户 `/models` 接口的 `input_modalities` 字段——目前账户里除 `gpt-5.3-codex-spark`(纯文本)外,各模型都声明 `text,image`;选择不支持图片的模型时,harness 会在发送前拒绝带图消息。工具结果里若包含图片无法表示(`function_call_output` 只支持文本),会得到明确的错误提示而不是被静默丢弃。
+
 ## 可选设置
 
 在 `$DSH_HOME/settings.yaml` 的 `codex:` 节里可以配置:
@@ -50,7 +52,8 @@
 
 ## 限制
 
-- 不支持图片输入。
+- 图片只能出现在用户消息里;工具结果里带图片会报错(`function_call_output` 只支持文本输出)。
+- `gpt-5.3-codex-spark` 是纯文本模型(账户接口声明的能力),不支持图片输入。
 - 不支持 stop 序列(Responses API 没有这个参数)。
 - 不支持输出 token 上限(后端不接受 `max_output_tokens`,harness 的 `maxTokens` 不会发送)。
 - 推理强度档位随模型由接口下发(`low`/`medium`/`high`/`xhigh`/`max`/`ultra` 的子集)。

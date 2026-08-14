@@ -4,10 +4,11 @@
 // The adapter follows the same shape as the official llm-deepseek adapter:
 // it registers the `codex` provider route on ctx.llm, resolves credentials
 // per request, and translates the Responses-API SSE stream into harness
-// StreamChunks. Authentication is OAuth-token based: tokens are read from
-// `~/.codex/auth.json` (written by the official codex CLI) or from
-// `~/.kino-dsh/codex-auth.json` (written by the bundled login script), and
-// are refreshed through auth.openai.com before they expire.
+// StreamChunks. Authentication is OAuth-token based: tokens are read from the
+// plugin's own credential file (`~/.kino-dsh/codex-auth.json` by default,
+// written by the bundled login flow) and refreshed through auth.openai.com
+// before they expire. Credentials of other programs (e.g. the codex CLI's
+// auth file) are never read.
 import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -37,9 +38,37 @@ const EFFORT_DISPLAY_NAMES = {
 function flattenText(blocks) {
 	return blocks.filter((block) => block.type === "text").map((block) => block.text).join("");
 }
-/** Reject core image content before any text-flattening path can silently erase it. */
-function assertTextOnly(blocks) {
-	if (contentHasImage(blocks)) throw new LlmError("The Codex adapter does not support image content.", "UNSUPPORTED_CONTENT");
+/** Reject image blocks that have no wire representation on the Codex backend. */
+function assertSerializableImages(message) {
+	if (message.role === "assistant") {
+		const images = message.content.filter((block) => block.type === "image");
+		if (images.length > 0) throw new LlmError("The Codex backend cannot accept image content in assistant turns.", "UNSUPPORTED_CONTENT");
+	}
+	for (const block of message.content) {
+		if (block.type === "tool-result" && contentHasImage(block.content)) throw new LlmError("The Codex backend cannot accept image content inside tool results (function_call_output only supports text).", "UNSUPPORTED_CONTENT");
+	}
+}
+/** Encode one stored attachment as a data URL for the wire. */
+function imageDataUrl(ref, data) {
+	return `data:${ref.mediaType};base64,${Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("base64")}`;
+}
+/**
+ * Resolve user-content blocks into Responses API content parts. Text becomes
+ * `input_text`; image attachments are read through the harness attachment
+ * store and become `input_image` parts with an inline data URL (the Codex
+ * backend accepts a string URL there, not the chat-completions object form).
+ */
+async function imageContentParts(blocks, attachments, signal) {
+	const parts = [];
+	for (const block of blocks) {
+		if (block.type === "text") parts.push({ type: "input_text", text: block.text });
+		else if (block.type === "image") {
+			if (attachments === void 0) throw new LlmError("Image input requires the harness attachment store, which is not available in this profile.", "UNSUPPORTED_CONTENT");
+			const { ref, data } = await attachments.readImage(block.attachment, signal);
+			parts.push({ type: "input_image", image_url: imageDataUrl(ref, data) });
+		}
+	}
+	return parts;
 }
 /** Validate the adapter-owned reasoning effort before putting it on the wire. */
 function reasoningEffort(effort) {
@@ -61,17 +90,21 @@ function wireReasoningEffort(effort) {
  * becomes a message item and every assistant tool call becomes its own flat
  * `function_call` item (the Codex backend rejects the public API's embedded
  * `tool_calls` array); every tool result becomes a `function_call_output`
- * item correlated by `call_id`. The harness `system` field is handled by the
- * caller through `instructions`. Reasoning blocks from history are dropped:
- * Codex reasoning is model-internal and cannot be replayed. Assistant turns
- * that produced neither text nor tool calls contribute no item.
+ * item correlated by `call_id`. User images become `input_image` content
+ * parts whose bytes are read from the harness attachment store. The harness
+ * `system` field is handled by the caller through `instructions`. Reasoning
+ * blocks from history are dropped: Codex reasoning is model-internal and
+ * cannot be replayed. Assistant turns that produced neither text nor tool
+ * calls contribute no item.
  * @param messages - the harness conversation, in order.
+ * @param attachments - the harness attachment store, or undefined.
+ * @param signal - cancellation for attachment reads.
  * @returns the wire input items.
  */
-function serializeInput(messages) {
+async function serializeInput(messages, attachments, signal) {
 	const items = [];
 	for (const message of messages) {
-		assertTextOnly(message.content);
+		assertSerializableImages(message);
 		if (message.role === "system") continue;
 		if (message.role === "assistant") {
 			const text = flattenText(message.content);
@@ -88,11 +121,11 @@ function serializeInput(messages) {
 			});
 			continue;
 		}
+		const parts = await imageContentParts(message.content, attachments, signal);
 		const toolResults = message.content.filter((block) => block.type === "tool-result");
-		const text = flattenText(message.content);
-		if (text.length > 0 || toolResults.length === 0) items.push({
+		if (parts.length > 0 || toolResults.length === 0) items.push({
 			role: "user",
-			content: [{ type: "input_text", text }]
+			content: parts.length > 0 ? parts : [{ type: "input_text", text: "" }]
 		});
 		for (const result of toolResults) items.push({
 			type: "function_call_output",
@@ -108,9 +141,11 @@ function serializeInput(messages) {
  * sends neither), so `options.stop` and `options.maxTokens` are deliberately
  * ignored; runaway output is bounded by the harness's own timeout policies.
  * @param options - the harness request (model, history, system, tools, sampling).
+ * @param attachments - the harness attachment store, or undefined.
+ * @param signal - cancellation for attachment reads.
  * @returns the Responses API request body.
  */
-function serializeRequest(options) {
+async function serializeRequest(options, attachments, signal) {
 	const tools = options.tools?.map((tool) => ({
 		type: "function",
 		name: tool.name,
@@ -123,7 +158,7 @@ function serializeRequest(options) {
 		// The Codex backend rejects requests without an explicit store value.
 		store: false,
 		...options.system !== void 0 ? { instructions: options.system } : {},
-		input: serializeInput(options.messages),
+		input: await serializeInput(options.messages, attachments, signal),
 		...tools !== void 0 && tools.length > 0 ? { tools } : {},
 		...options.temperature !== void 0 ? { temperature: options.temperature } : {},
 		...options.reasoningEffort !== void 0 ? { reasoning: { effort: wireReasoningEffort(options.reasoningEffort) } } : {}
@@ -594,12 +629,13 @@ class CodexTokenStore {
 			}));
 			const defaultLevel = entry.default_reasoning_level;
 			const contextWindow = Number.isInteger(entry.context_window) && entry.context_window > 0 ? entry.context_window : void 0;
+			const inputModalities = (Array.isArray(entry.input_modalities) ? entry.input_modalities : []).filter((modality) => modality === "text" || modality === "image");
 			return {
 				provider: PROVIDER,
 				id: entry.slug ?? entry.id,
 				name: entry.display_name ?? entry.name ?? entry.slug ?? entry.id,
 				...typeof entry.description === "string" && entry.description !== "" ? { description: entry.description } : {},
-				inputModalities: ["text"],
+				...inputModalities.length === 0 ? {} : { inputModalities },
 				...contextWindow === void 0 ? {} : { contextWindow },
 				...efforts.length === 0 ? {} : { reasoning: {
 					efforts,
@@ -664,43 +700,53 @@ const REASONING_EFFORTS = [
  * unreachable. It never merges into the live list: online, the picker shows
  * exactly what the account's catalog returns (internal aliases such as
  * `visibility: "hide"` entries are filtered out, mirroring the official codex
- * CLI). Context figures mirror the live endpoint's context_window values.
+ * CLI). Context figures mirror the live endpoint's context_window values;
+ * input modalities mirror the live `input_modalities` declarations (every
+ * listed model accepts images except GPT-5.3-Codex-Spark, which is
+ * text-only).
  */
 const DEFAULT_MODELS = [
 	{
 		id: "gpt-5.6-sol",
 		name: "GPT-5.6-Sol",
-		contextWindow: 272000
+		contextWindow: 272000,
+		inputModalities: ["text", "image"]
 	},
 	{
 		id: "gpt-5.6-terra",
 		name: "GPT-5.6-Terra",
-		contextWindow: 272000
+		contextWindow: 272000,
+		inputModalities: ["text", "image"]
 	},
 	{
 		id: "gpt-5.6-luna",
 		name: "GPT-5.6-Luna",
-		contextWindow: 272000
+		contextWindow: 272000,
+		inputModalities: ["text", "image"]
 	},
 	{
 		id: "gpt-5.5",
 		name: "GPT-5.5",
-		contextWindow: 272000
+		contextWindow: 272000,
+		inputModalities: ["text", "image"]
 	},
 	{
 		id: "gpt-5.4",
 		name: "GPT-5.4",
-		contextWindow: 272000
+		contextWindow: 272000,
+		inputModalities: ["text", "image"]
 	},
 	{
 		id: "gpt-5.4-mini",
 		name: "GPT-5.4-Mini",
-		contextWindow: 272000
+		contextWindow: 272000,
+		inputModalities: ["text", "image"]
 	},
 	{
 		id: "gpt-5.3-codex-spark",
 		name: "GPT-5.3-Codex-Spark",
-		contextWindow: 128000
+		contextWindow: 128000,
+		inputModalities: ["text"]
 	}
 ];
 /** Pick the endpoint for one credential mode. */
@@ -714,7 +760,8 @@ function modelInfo(provider, model) {
 		id: model.id,
 		name: model.name ?? model.id,
 		...model.description === void 0 ? {} : { description: model.description },
-		inputModalities: ["text"]
+		// Absent means unknown: never fabricate a negative image capability.
+		...model.inputModalities === void 0 ? {} : { inputModalities: model.inputModalities }
 	};
 }
 /**
@@ -785,12 +832,9 @@ var CodexAdapter = class extends LlmAdapter {
 			const configuredDefault = config.defaultReasoningEffort !== void 0 && efforts.some((effort) => effort.id === config.defaultReasoningEffort) ? ReasoningEffortId(config.defaultReasoningEffort) : void 0;
 			const defaultEffort = configuredDefault ?? (live?.reasoning?.defaultEffort !== void 0 && efforts.some((effort) => effort.id === live.reasoning.defaultEffort) ? live.reasoning.defaultEffort : void 0);
 			return {
-				...live === void 0 ? {
-					provider,
-					id: model,
-					name: model,
-					inputModalities: ["text"]
-				} : modelInfo(provider, live),
+				...live === void 0 ? modelInfo(provider, DEFAULT_MODELS.find((entry) => entry.id === model) ?? {
+					id: model
+				}) : modelInfo(provider, live),
 				context: {
 					contextWindow: live?.contextWindow ?? DEFAULT_MODELS.find((entry) => entry.id === model)?.contextWindow ?? config.defaultContextWindow
 				},
@@ -834,7 +878,7 @@ var CodexAdapter = class extends LlmAdapter {
 		}
 	}
 	async *request(options, signal, baseURL, auth, onComment) {
-		const body = serializeRequest(options);
+		const body = await serializeRequest(options, this.config.attachments, signal);
 		const headers = {
 			...this.config.tokenStore.authHeaders(auth.token, auth.accountId),
 			"content-type": "application/json",
@@ -1105,9 +1149,11 @@ function apply(ctx, config) {
 	};
 	options();
 	const tokenStore = new CodexTokenStore(options, ctx.logger);
+	const attachments = ctx.get("attachments");
 	const adapter = new CodexAdapter({
 		options,
 		tokenStore,
+		attachments,
 		logger: ctx.logger
 	});
 	// The provider only becomes visible in the Models page and the model
