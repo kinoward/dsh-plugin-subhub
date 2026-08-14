@@ -878,7 +878,8 @@ var CodexAdapter = class extends LlmAdapter {
 		}
 	}
 	async *request(options, signal, baseURL, auth, onComment) {
-		const body = await serializeRequest(options, this.config.attachments, signal);
+		const attachments = this.config.resolveAttachments?.();
+		const body = await serializeRequest(options, attachments, signal);
 		const headers = {
 			...this.config.tokenStore.authHeaders(auth.token, auth.accountId),
 			"content-type": "application/json",
@@ -1149,11 +1150,19 @@ function apply(ctx, config) {
 	};
 	options();
 	const tokenStore = new CodexTokenStore(options, ctx.logger);
-	const attachments = ctx.get("attachments");
+	// The harness loader mounts entries concurrently, so an apply-time
+	// `ctx.get("attachments")` can race the attachment store's mount and
+	// capture undefined forever. Keep the value reactive (ctx.inject
+	// re-delivers whenever the service appears) and re-read on demand, the
+	// same pattern the harness's own adapters use.
+	let attachments = ctx.get("attachments");
+	ctx.inject(["attachments"], (attachmentCtx) => {
+		attachments = attachmentCtx.attachments;
+	});
 	const adapter = new CodexAdapter({
 		options,
 		tokenStore,
-		attachments,
+		resolveAttachments: () => attachments ?? ctx.get("attachments"),
 		logger: ctx.logger
 	});
 	// The provider only becomes visible in the Models page and the model
