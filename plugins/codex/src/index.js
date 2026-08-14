@@ -847,6 +847,7 @@ function createLoginController(tokenStore, logger) {
 						ok: true,
 						loggedIn: tokenStore.hasTokens(),
 						authFile: tokenStore.writeFilePath(),
+						readFile: tokenStore.authFilePath(),
 						pending: pending !== void 0
 					});
 					return;

@@ -25,6 +25,10 @@
    脚本会打印一个链接和一次性码;在浏览器打开链接、输入码完成登录后,默认把凭据写到 `~/.kino-dsh/codex-auth.json`。可用 `--auth-file <路径>` 覆盖保存位置;文件权限为 0600。
 
 > 读取优先级:插件先读 `~/.codex/auth.json`,不存在时读 `~/.kino-dsh/codex-auth.json`。网页与脚本登录都写入 `~/.kino-dsh/codex-auth.json`(除非 `authFile` 显式指定),不会动 codex CLI 自己的文件。
+>
+> **为什么可能"自动登录"了**:如果本机存在官方 codex CLI 登录留下的 `~/.codex/auth.json`,插件会直接复用其中凭据(同一账户、同一个 OAuth 应用),设置面板直接显示「已登录」。这是预期行为,不是绕过了登录;面板上会标明当前生效的凭据文件。
+>
+> 想要一条完全独立的凭据路径(例如多账户切换):在 `$DSH_HOME/settings.yaml` 的 `codex:` 节设置 `authFile: <绝对路径>`,插件就只读写该文件,网页登录成为唯一来源。切换账户前如存在旧凭据,先 `codex logout` 或删除对应文件。
 
 ## 使用
 
