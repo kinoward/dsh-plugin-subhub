@@ -31,7 +31,7 @@
 
 登录完成后,在 DeepSeek Harness 的模型选择器里把提供商切到「OpenAI 订阅」,再选一个模型即可。在线时显示你的账户可用模型;拉取失败时回退到静态备用模型(gpt-5.6-sol、gpt-5.6-terra、gpt-5.6-luna、gpt-5.5、gpt-5.4、gpt-5.4-mini、gpt-5.3-codex-spark)。
 
-**设置模型与思考深度**:在「模型」页的「OpenAI 订阅」服务行点「编辑」可配置备用模型列表(`models`)、默认思考深度(`defaultReasoningEffort`)等;单次会话的模型与思考深度在模型选择器里随时切换(可选 `low` / `medium` / `high`)。
+**设置模型与思考深度**:在「模型」页的「OpenAI 订阅」服务行点「编辑」可配置备用模型列表(`models`)、默认思考深度(`defaultReasoningEffort`)等;单次会话的模型与思考深度在模型选择器里随时切换。可选档位由模型接口**动态下发、不写死**:每个模型展示它自己支持的档位(如 gpt-5.6-sol 支持 `low`~`ultra` 六档,gpt-5.5 支持 `low`~`xhigh` 四档),默认档也取自接口。
 
 ## 可选设置
 
@@ -45,7 +45,7 @@
 | `defaultContextWindow` | `400000` | 默认上下文窗口(token 数) |
 | `modelsCacheTtlMs` | `300000` | 模型列表缓存时长(毫秒) |
 | `models` | 静态备用模型列表 | 请求失败时的回退模型,每项形如 `{id, name?, description?, contextWindow?}` |
-| `defaultReasoningEffort` | 空(用提供商默认) | 默认思考深度:`low` / `medium` / `high` |
+| `defaultReasoningEffort` | 空(用模型接口默认) | 默认思考深度:`low`/`medium`/`high`/`xhigh`/`max`/`ultra`;模型不支持的档位会回退到接口默认 |
 | `streamIdleTimeoutMs` | `300000` | 流式响应空闲超时(毫秒) |
 | `retryPolicy` | `normal`(重试 2 次) | 请求重试策略 |
 
@@ -54,7 +54,7 @@
 - 不支持图片输入。
 - 不支持 stop 序列(Responses API 没有这个参数)。
 - 不支持输出 token 上限(后端不接受 `max_output_tokens`,harness 的 `maxTokens` 不会发送)。
-- 推理强度可选 `low` / `medium` / `high`。
+- 推理强度档位随模型由接口下发(`low`/`medium`/`high`/`xhigh`/`max`/`ultra` 的子集)。
 
 ## 禁用方式
 

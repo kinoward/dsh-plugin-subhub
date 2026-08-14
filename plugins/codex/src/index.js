@@ -17,6 +17,21 @@ import { deepEqualJson, installSettingsSection, settingsNamespace } from "@deeps
 import { MAX_TIMER_DELAY_MS, idleWatchdog, timeoutOf } from "@deepseek-ai/dsh-timeout";
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import { authFilePayload, exchangeAuthorizationCode, pollAuthorizationOnce, requestUserCode } from "./device-flow.js";
+/**
+ * Reasoning-effort vocabulary the Codex backend advertises per model through
+ * `supported_reasoning_levels`. The adapter does NOT hardcode the selection:
+ * the picker shows exactly what the model's catalog entry offers, and the
+ * wire value is the effort id itself. Fallback names are display-only.
+ */
+const WIRE_EFFORT_VALUES = new Set(["low", "medium", "high", "xhigh", "max", "ultra"]);
+const EFFORT_DISPLAY_NAMES = {
+	low: "Low",
+	medium: "Medium",
+	high: "High",
+	xhigh: "X-High",
+	max: "Max",
+	ultra: "Ultra"
+};
 //#region serialize: harness messages -> Responses API input
 /** Join the text blocks of a message (used for user/tool-result content). */
 function flattenText(blocks) {
@@ -28,7 +43,7 @@ function assertTextOnly(blocks) {
 }
 /** Validate the adapter-owned reasoning effort before putting it on the wire. */
 function reasoningEffort(effort) {
-	if (effort === "low" || effort === "medium" || effort === "high") return effort;
+	if (WIRE_EFFORT_VALUES.has(effort)) return effort;
 	throw new LlmError(`Codex models do not support reasoning effort "${effort}"`, "UNSUPPORTED_REASONING_EFFORT");
 }
 /**
@@ -560,15 +575,41 @@ class CodexTokenStore {
 		}
 		const body = await response.json();
 		const raw = Array.isArray(body?.models) ? body.models : Array.isArray(body?.data) ? body.data : [];
-		this.catalog = raw.filter((entry) => typeof entry?.slug === "string" || typeof entry?.id === "string").map((entry) => ({
-			provider: PROVIDER,
-			id: entry.slug ?? entry.id,
-			name: entry.display_name ?? entry.name ?? entry.slug ?? entry.id,
-			...typeof entry.description === "string" && entry.description !== "" ? { description: entry.description } : {},
-			inputModalities: ["text"]
-		}));
+		this.catalog = raw.filter((entry) => typeof entry?.slug === "string" || typeof entry?.id === "string").map((entry) => {
+			const levels = Array.isArray(entry.supported_reasoning_levels) ? entry.supported_reasoning_levels : [];
+			const efforts = levels.map((level) => typeof level === "string" ? { effort: level } : level).filter((level) => typeof level?.effort === "string" && WIRE_EFFORT_VALUES.has(level.effort)).map((level) => ({
+				id: ReasoningEffortId(level.effort),
+				name: EFFORT_DISPLAY_NAMES[level.effort] ?? level.effort,
+				...typeof level.description === "string" && level.description !== "" ? { description: level.description } : {}
+			}));
+			const defaultLevel = entry.default_reasoning_level;
+			return {
+				provider: PROVIDER,
+				id: entry.slug ?? entry.id,
+				name: entry.display_name ?? entry.name ?? entry.slug ?? entry.id,
+				...typeof entry.description === "string" && entry.description !== "" ? { description: entry.description } : {},
+				inputModalities: ["text"],
+				...efforts.length === 0 ? {} : { reasoning: {
+					efforts,
+					...defaultLevel !== void 0 && efforts.some((effort) => effort.id === defaultLevel) ? { defaultEffort: ReasoningEffortId(defaultLevel) } : {}
+				} }
+			};
+		});
 		this.catalogAt = now;
 		return this.catalog;
+	}
+	/**
+	 * One catalog entry by exact model id, loading (or reusing the cached)
+	 * catalog first. Never throws: failures degrade to `undefined`, so
+	 * capability resolution always falls back to configured metadata.
+	 */
+	async catalogEntry(config, id) {
+		try {
+			const catalog = await this.listModels(config);
+			return catalog?.find((entry) => entry.id === id);
+		} catch {
+			return void 0;
+		}
 	}
 }
 //#endregion
@@ -588,6 +629,10 @@ const PROVIDER = "codex";
 const LOW_REASONING_EFFORT = ReasoningEffortId("low");
 const MEDIUM_REASONING_EFFORT = ReasoningEffortId("medium");
 const HIGH_REASONING_EFFORT = ReasoningEffortId("high");
+/**
+ * Offline fallback efforts, used only while the live catalog (which carries
+ * per-model supported_reasoning_levels) is unreachable.
+ */
 const REASONING_EFFORTS = [
 	{
 		id: LOW_REASONING_EFFORT,
@@ -698,20 +743,27 @@ var CodexAdapter = class extends LlmAdapter {
 	resolveModel(provider, model) {
 		const config = this.config.options();
 		const configured = config.models.find((entry) => entry.id === model);
-		return Promise.resolve({
-			...configured === void 0 ? {
-				provider,
-				id: model,
-				name: model,
-				inputModalities: ["text"]
-			} : modelInfo(provider, configured),
-			context: {
-				contextWindow: configured?.contextWindow ?? config.defaultContextWindow
-			},
-			reasoning: {
-				efforts: REASONING_EFFORTS,
-				...config.defaultReasoningEffort !== void 0 ? { defaultEffort: ReasoningEffortId(config.defaultReasoningEffort) } : {}
-			}
+		return this.config.tokenStore.catalogEntry(config, model).then((live) => {
+			// Reasoning levels come from the model's own catalog entry; the
+			// static three-step list is only an offline fallback.
+			const efforts = live?.reasoning?.efforts ?? REASONING_EFFORTS;
+			const configuredDefault = config.defaultReasoningEffort !== void 0 && efforts.some((effort) => effort.id === config.defaultReasoningEffort) ? ReasoningEffortId(config.defaultReasoningEffort) : void 0;
+			const defaultEffort = configuredDefault ?? (live?.reasoning?.defaultEffort !== void 0 && efforts.some((effort) => effort.id === live.reasoning.defaultEffort) ? live.reasoning.defaultEffort : void 0);
+			return {
+				...configured === void 0 ? {
+					provider,
+					id: model,
+					name: model,
+					inputModalities: ["text"]
+				} : modelInfo(provider, configured),
+				context: {
+					contextWindow: configured?.contextWindow ?? config.defaultContextWindow
+				},
+				reasoning: {
+					efforts,
+					...defaultEffort !== void 0 ? { defaultEffort } : {}
+				}
+			};
 		});
 	}
 	async *stream(options) {
@@ -966,7 +1018,7 @@ const Config = z.object({
 	defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
 	modelsCacheTtlMs: z.number().min(1).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_MODELS_CACHE_TTL_MS),
 	models: z.array(catalogModel).default(DEFAULT_MODELS),
-	defaultReasoningEffort: z.union(["low", "medium", "high"]),
+	defaultReasoningEffort: z.union(["low", "medium", "high", "xhigh", "max", "ultra"]),
 	streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
 	retryPolicy: RetryPolicySchema
 });
@@ -996,7 +1048,7 @@ function resolveModels(models) {
  */
 function resolveAdapterOptions(config) {
 	if (config.defaultContextWindow !== void 0 && (!Number.isInteger(config.defaultContextWindow) || config.defaultContextWindow <= 0)) throw new Error("codex: defaultContextWindow must be a positive integer");
-	if (config.defaultReasoningEffort !== void 0 && config.defaultReasoningEffort !== "low" && config.defaultReasoningEffort !== "medium" && config.defaultReasoningEffort !== "high") throw new Error("codex: defaultReasoningEffort must be low, medium, or high");
+	if (config.defaultReasoningEffort !== void 0 && !WIRE_EFFORT_VALUES.has(config.defaultReasoningEffort)) throw new Error(`codex: defaultReasoningEffort must be one of ${[...WIRE_EFFORT_VALUES].join(", ")}`);
 	const streamIdleTimeoutMs = config.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS;
 	if (!Number.isFinite(streamIdleTimeoutMs) || streamIdleTimeoutMs <= 0 || streamIdleTimeoutMs > MAX_TIMER_DELAY_MS) throw new Error(`codex: streamIdleTimeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`);
 	const modelsCacheTtlMs = config.modelsCacheTtlMs ?? DEFAULT_MODELS_CACHE_TTL_MS;
