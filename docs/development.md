@@ -54,7 +54,7 @@ dsh --profile demo
 node plugins/codex/login.js
 ```
 
-脚本会打印一个链接和一次性码,在浏览器打开链接、输入码后,默认把凭据写到 `~/.kino-dsh/codex-auth.json`(权限 0600)。已用官方 codex CLI 登录过的,插件会直接读 `~/.codex/auth.json`,无需再登录。
+脚本会打印一个链接和一次性码,在浏览器打开链接、输入码后,把凭据写到 `~/.kino-dsh/codex-auth.json`(权限 0600)。隐私约束:插件只读写自己的凭据文件,不读取 codex CLI 的 `~/.codex/auth.json` 或其它程序的认证文件;每位用户安装后都必须通过插件完成一次登录授权。
 
 插件同时带客户端半边:登录 API 是宿主插件注册的 `webServer` 前缀路由(`/api/kino-codex/*`,只接受本机同源请求),设置页 UI 是 `plugins/codex/src/client.js`(手写模块加载器格式),由 `plugins/codex/package.json` 的 `dsh.client` 声明并随 `settings.section` 插槽挂进设置面板。
 

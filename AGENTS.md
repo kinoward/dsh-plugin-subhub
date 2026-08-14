@@ -9,6 +9,7 @@
 - 纯 JavaScript、无构建步骤、无 `prepare` 脚本;插件源码直接位于 `plugins/<name>/src/index.js`。
 - 插件如需 npm 依赖,只能加在**根** `package.json`(用户只安装根包,子目录依赖不生效)。
 - 密钥、凭据、token 一律不进仓库文件;机密走环境变量或宿主侧配置。
+- **凭据隐私边界**:插件只读写自己拥有的凭据文件(如 `~/.kino-dsh/<name>-auth.json`),不得读取、复用其它程序(如 codex CLI 的 `~/.codex/auth.json`)的认证文件;用户显式用配置指定文件路径的除外。安装插件不构成对既有登录的授权。
 
 ## 文件职责
 

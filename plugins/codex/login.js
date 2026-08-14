@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Standalone device-code login for the kino-codex plugin. It implements the
 // same flow the official codex CLI uses (`codex login` with device code) and
-// writes a codex-shaped auth.json, so either tool can read it.
+// writes credentials in the codex file format — but the plugin reads ONLY its
+// own credential file, never another program's auth files.
 //
 // The web settings page's Codex section offers the same flow in the browser;
 // use this script on headless profiles or when you prefer a terminal.

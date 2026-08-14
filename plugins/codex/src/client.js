@@ -66,8 +66,7 @@ window.__ModuleLoader__.load({
 					setStatus({
 						phase: "ready",
 						loggedIn: result.loggedIn === true,
-						authFile: result.authFile,
-						readFile: result.readFile
+						authFile: result.authFile
 					});
 				} catch (error) {
 					if (mounted.current) setStatus({
@@ -144,7 +143,7 @@ window.__ModuleLoader__.load({
 				onClick
 			}, label);
 			return h("div", { className: "kino-codex" }, [
-				h("p", { className: "kino-codex-copy", key: "copy" }, "使用 ChatGPT / Codex 订阅账户登录,即可在模型选择器里选用 GPT 模型(无需 API Key)。"),
+				h("p", { className: "kino-codex-copy", key: "copy" }, "使用 ChatGPT / Codex 订阅账户登录,即可在模型选择器里选用 GPT 模型(无需 API Key)。本插件只使用自己保存的凭据,不会读取 codex CLI 等其它程序的登录信息。"),
 				status.phase === "loading" ? h("p", { key: "body" }, "正在读取登录状态…") : status.phase === "error" ? h("p", {
 					className: "kino-codex-error",
 					key: "body"
@@ -164,10 +163,10 @@ window.__ModuleLoader__.load({
 						stopPoll();
 						setLogin({ phase: "idle" });
 					})
-				]) : login.phase === "success" ? h("div", { key: "body" }, [
-					h("p", { className: "kino-codex-success" }, `✓ 登录成功,凭据已保存到 ${login.authFile}。现在可以在模型选择器里选择 Codex 提供商。`),
-					status.readFile !== void 0 && status.readFile !== status.authFile ? h("p", { className: "kino-codex-hint" }, `注意:系统里还有 ${status.readFile}(官方 codex CLI 的凭据),读取时会优先用它;如需改用新登录的账户,请先运行 codex logout 或删除该文件。`) : null
-				]) : login.phase === "expired" ? h("div", { key: "body" }, [
+				]) : login.phase === "success" ? h("p", {
+					className: "kino-codex-success",
+					key: "body"
+				}, `✓ 登录成功,凭据已保存到 ${login.authFile}。现在可以在模型选择器里选择 Codex 提供商。`) : login.phase === "expired" ? h("div", { key: "body" }, [
 					h("p", { className: "kino-codex-error" }, "一次性码已过期,请重新登录。"),
 					button("重新登录", () => void start())
 				]) : login.phase === "error" ? h("div", { key: "body" }, [
@@ -175,8 +174,7 @@ window.__ModuleLoader__.load({
 					button("重试", () => void start())
 				]) : status.loggedIn === true ? h("div", { key: "body" }, [
 					h("p", { className: "kino-codex-success" }, "✓ 已登录,Codex 提供商已就绪。"),
-					h("p", { className: "kino-codex-hint" }, `当前生效凭据:${status.readFile ?? status.authFile}`),
-					status.readFile !== void 0 && status.readFile !== status.authFile ? h("p", { className: "kino-codex-hint" }, `「重新登录」会写入 ${status.authFile},但读取仍优先上面的文件;如需切换账户,请先运行 codex logout 或删除该文件。`) : null,
+					h("p", { className: "kino-codex-hint" }, `凭据文件:${status.authFile}`),
 					button("重新登录", () => void start())
 				]) : button("使用 ChatGPT 账号登录", () => void start(), "kino-codex-btn kino-codex-primary")
 			]);

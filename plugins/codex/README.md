@@ -4,31 +4,26 @@
 
 ## 工作原理
 
-- 鉴权基于 OAuth token:优先读官方 codex CLI 登录留下的 `~/.codex/auth.json`;没有时读随包登录脚本写入的 `~/.kino-dsh/codex-auth.json`。
-- `access_token` 是 JWT,临近过期(5 分钟内)会自动用 `refresh_token` 刷新,刷新端点 `https://auth.openai.com/oauth/token`;刷新会加锁(并发时只刷一次),并把新 token 回写文件(权限 0600)。
-- 如果存在 `OPENAI_API_KEY`,则按 API key 模式走 `https://api.openai.com/v1`。
+- 鉴权基于 OAuth token,凭据只放在插件自己的文件 `~/.kino-dsh/codex-auth.json`(或 `authFile` 显式指定的文件);`access_token` 是 JWT,临近过期(5 分钟内)会自动用 `refresh_token` 刷新,刷新端点 `https://auth.openai.com/oauth/token`;刷新会加锁(并发时只刷一次),并把新 token 回写文件(权限 0600)。
+- **隐私边界**:插件默认只读写自己的凭据文件,绝不读取 codex CLI 的 `~/.codex/auth.json` 或其它程序的认证文件。安装后每位用户都必须通过本插件完成一次登录授权,不会"复用"任何既有登录。
+- 如果自己的凭据文件里存在 `OPENAI_API_KEY`,则按 API key 模式走 `https://api.openai.com/v1`。
 - 模型列表来自 `GET https://chatgpt.com/backend-api/codex/models`,缓存 5 分钟;失败时回退到静态备用模型列表。
 - 请求走 Responses API:`POST https://chatgpt.com/backend-api/codex/responses`,SSE 流式,`store: false`。
 
 ## 登录
 
-三种方式,任选其一:
+安装插件后**必须完成一次本插件的登录授权**(无论本机是否用过 codex CLI,插件都不会读取它的凭据)。两种方式,任选其一:
 
-1. **网页设置面板(推荐,无需安装任何东西)**:打开 DeepSeek Harness 的设置面板,进入 **Codex** 分区,点「使用 ChatGPT 账号登录」。页面会显示登录链接和一次性码(可一键复制);在浏览器里打开链接、输入一次性码后,页面会自动完成登录。全程在设备码流程内,凭据只落在本机,页面上永远看不到 token。
-2. **官方 codex CLI 已登录过**:插件直接读 `~/.codex/auth.json`,无需额外操作。
-3. **运行随包登录脚本**(无头 profile 或偏好终端的用户):
+1. **网页设置面板(推荐)**:打开 DeepSeek Harness 的设置面板,进入 **Codex** 分区,点「使用 ChatGPT 账号登录」。页面会显示登录链接和一次性码(可一键复制);在浏览器里打开链接、输入一次性码后,页面会自动完成登录。全程在设备码流程内,凭据只落在本机,页面上永远看不到 token。
+2. **运行随包登录脚本**(无头 profile 或偏好终端的用户):
 
    ```sh
    node plugins/codex/login.js
    ```
 
-   脚本会打印一个链接和一次性码;在浏览器打开链接、输入码完成登录后,默认把凭据写到 `~/.kino-dsh/codex-auth.json`。可用 `--auth-file <路径>` 覆盖保存位置;文件权限为 0600。
+   脚本会打印一个链接和一次性码;在浏览器打开链接、输入码完成登录后,把凭据写到 `~/.kino-dsh/codex-auth.json`。可用 `--auth-file <路径>` 覆盖保存位置;文件权限为 0600。
 
-> 读取优先级:插件先读 `~/.codex/auth.json`,不存在时读 `~/.kino-dsh/codex-auth.json`。网页与脚本登录都写入 `~/.kino-dsh/codex-auth.json`(除非 `authFile` 显式指定),不会动 codex CLI 自己的文件。
->
-> **为什么可能"自动登录"了**:如果本机存在官方 codex CLI 登录留下的 `~/.codex/auth.json`,插件会直接复用其中凭据(同一账户、同一个 OAuth 应用),设置面板直接显示「已登录」。这是预期行为,不是绕过了登录;面板上会标明当前生效的凭据文件。
->
-> 想要一条完全独立的凭据路径(例如多账户切换):在 `$DSH_HOME/settings.yaml` 的 `codex:` 节设置 `authFile: <绝对路径>`,插件就只读写该文件,网页登录成为唯一来源。切换账户前如存在旧凭据,先 `codex logout` 或删除对应文件。
+> 两种方式写入同一个插件自有文件。想要自定义位置或彻底隔离:在 `$DSH_HOME/settings.yaml` 的 `codex:` 节设置 `authFile: <绝对路径>`,插件就只读写该文件。切换账户:直接重新登录即可覆盖,或删除该文件后重新登录。
 
 ## 使用
 
@@ -40,7 +35,7 @@
 
 | 键 | 默认值 | 说明 |
 | --- | --- | --- |
-| `authFile` | 空 | 鉴权文件路径;留空时优先读 `~/.codex/auth.json`,其次 `~/.kino-dsh/codex-auth.json` |
+| `authFile` | `~/.kino-dsh/codex-auth.json` | 鉴权文件路径;默认插件自有文件,显式指定后只读写该文件 |
 | `baseURL` | `https://chatgpt.com/backend-api/codex` | ChatGPT OAuth 模式的后端地址 |
 | `apiBaseURL` | `https://api.openai.com/v1` | API key 模式的后端地址 |
 | `defaultContextWindow` | `400000` | 默认上下文窗口(token 数) |

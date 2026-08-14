@@ -8,7 +8,7 @@
 // `~/.codex/auth.json` (written by the official codex CLI) or from
 // `~/.kino-dsh/codex-auth.json` (written by the bundled login script), and
 // are refreshed through auth.openai.com before they expire.
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import z from "@deepseek-ai/schemastery";
@@ -396,21 +396,21 @@ class CodexTokenStore {
 		this.catalogAt = 0;
 		this.catalogFailureAt = 0;
 	}
+	/**
+	 * The one credential file this plugin owns. It never reads another
+	 * program's auth files (the codex CLI's `~/.codex/auth.json` included)
+	 * unless the user points `authFile` at one explicitly — installing this
+	 * plugin must not silently reuse credentials the user granted to other
+	 * software.
+	 */
 	authFilePath() {
 		const config = this.options();
 		if (config.authFile !== void 0 && config.authFile.trim() !== "") return config.authFile.trim();
-		const codexFile = join(homedir(), ".codex", "auth.json");
-		if (existsSync(codexFile)) return codexFile;
 		return join(homedir(), ".kino-dsh", "codex-auth.json");
 	}
-	/**
-	 * The file NEW logins are written to. Never the codex CLI's own file
-	 * unless the user pointed `authFile` at it explicitly.
-	 */
+	/** New logins land in the same plugin-owned file. */
 	writeFilePath() {
-		const config = this.options();
-		if (config.authFile !== void 0 && config.authFile.trim() !== "") return config.authFile.trim();
-		return join(homedir(), ".kino-dsh", "codex-auth.json");
+		return this.authFilePath();
 	}
 	/** Whether any usable credential (tokens or API key) is on disk. */
 	hasTokens() {
@@ -847,7 +847,6 @@ function createLoginController(tokenStore, logger) {
 						ok: true,
 						loggedIn: tokenStore.hasTokens(),
 						authFile: tokenStore.writeFilePath(),
-						readFile: tokenStore.authFilePath(),
 						pending: pending !== void 0
 					});
 					return;
