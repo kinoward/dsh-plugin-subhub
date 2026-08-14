@@ -1,14 +1,16 @@
 // Client half of the kino-codex plugin: the "第三方订阅" settings section —
 // one hub page where every third-party subscription provider lives. Each
 // provider card shares the same login-modal surface; today OpenAI (ChatGPT /
-// Codex subscription) is wired end to end, and further providers (Anthropic,
-// 火山方舟 Coding Plan, …) plug in by adding a card entry plus their own
-// host-side auth endpoints. Only after a successful login does the host
-// register the provider route, which is what makes it appear in the Models
-// page and the model picker. The UI follows the shell design system: shell
-// primitives (Button / Modal / StateDot), --dsw-alias-* theme tokens, and
-// locale dictionaries registered through the locale service. Hand-written
-// client bundle in the shell's module-loader format (no build step).
+// Codex subscription) is wired end to end, and further providers plug in by
+// adding a card entry plus their own host-side auth endpoints. Only after a
+// successful login does the host register the provider route, which is what
+// makes it appear in the Models page and the model picker. The same plugin
+// also augments the Models page: expanding the OpenAI 订阅 row replaces the
+// generic settings chrome with a read-only live model catalog. The UI
+// follows the shell design system: shell primitives (Button / Modal /
+// StateDot), --dsw-alias-* theme tokens, and locale dictionaries registered
+// through the locale service. Hand-written client bundle in the shell's
+// module-loader format (no build step).
 window.__ModuleLoader__.load({
 	id: "kino-dsh-plugins/codex",
 	factory: (require) => {
@@ -65,7 +67,16 @@ window.__ModuleLoader__.load({
 			expired: "一次性码已过期,请重新登录。",
 			loginFailed: "登录失败:{message}",
 			loginButton: "使用 ChatGPT 账号登录",
-			loginButtonAgain: "使用新账号登录"
+			loginButtonAgain: "使用新账号登录",
+			modelsTitle: "可用模型",
+			modelsMeta: "来自 ChatGPT 订阅 · 共 {count} 个模型 · 实时同步",
+			modelsLoading: "正在读取模型列表…",
+			modelsError: "无法读取模型列表:{message}",
+			modelsEmpty: "暂无可用模型。",
+			contextTag: "上下文 {value}",
+			imageTag: "支持图片",
+			reasoningTag: "推理 {names}",
+			defaultTag: "默认 {name}"
 		};
 		/** English dictionary, checked complete against the zh key set. */
 		const en = {
@@ -102,7 +113,16 @@ window.__ModuleLoader__.load({
 			expired: "The one-time code has expired. Please sign in again.",
 			loginFailed: "Sign-in failed: {message}",
 			loginButton: "Sign in with ChatGPT",
-			loginButtonAgain: "Sign in with a different account"
+			loginButtonAgain: "Sign in with a different account",
+			modelsTitle: "Available models",
+			modelsMeta: "From your ChatGPT subscription · {count} models · synced live",
+			modelsLoading: "Reading the model list…",
+			modelsError: "Could not read the model list: {message}",
+			modelsEmpty: "No models are available.",
+			contextTag: "Context {value}",
+			imageTag: "Image input",
+			reasoningTag: "Reasoning {names}",
+			defaultTag: "Default {name}"
 		};
 		const css = [
 			".kino-sub-root{width:100%;max-width:720px;display:flex;flex-direction:column;gap:12px;color:var(--dsw-alias-label-primary)}",
@@ -136,7 +156,22 @@ window.__ModuleLoader__.load({
 			".kino-sub-linkrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}",
 			".kino-sub-code{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:18px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-fill-tsp-secondary);border-radius:6px;padding:6px 10px;overflow-wrap:anywhere}",
 			".kino-sub-usercode{flex:0 1 auto;font-size:15px;letter-spacing:.06em}",
-			".kino-sub-waiting{display:flex;align-items:center;gap:8px;margin:0;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}"
+			".kino-sub-waiting{display:flex;align-items:center;gap:8px;margin:0;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}",
+			".kino-sub-catalog{display:flex;flex-direction:column;gap:10px;width:100%;min-width:0}",
+			".kino-sub-catalog-head{display:flex;flex-direction:column;gap:2px}",
+			".kino-sub-catalog-title{color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:500;line-height:18px}",
+			".kino-sub-catalog-meta{margin:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}",
+			".kino-sub-catalog-list{display:flex;flex-direction:column;gap:8px}",
+			".kino-sub-model{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;min-width:0}",
+			".kino-sub-model-head{display:flex;align-items:baseline;gap:8px;min-width:0;flex-wrap:wrap}",
+			".kino-sub-model-id{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:20px;color:var(--dsw-alias-label-primary);overflow-wrap:anywhere}",
+			".kino-sub-model-name{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+			".kino-sub-model-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}",
+			".kino-sub-model-tag{border:1px solid var(--dsw-alias-border-l3);color:var(--dsw-alias-label-secondary);border-radius:4px;flex:none;padding:1px 6px;font-size:11px;line-height:16px}",
+			".kino-sub-model-desc{margin:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}",
+			".kino-sub-catalog-mount{display:flex;flex-direction:column;gap:10px;min-width:0}",
+			".kino-sub-retry{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);height:28px;color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer;background:0 0;border-radius:14px;align-self:flex-start;padding:0 10px;font-size:12px;line-height:18px}",
+			".kino-sub-retry:hover{background:var(--dsw-alias-interactive-bg-hover)}"
 		].join("\n");
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=\"kino-subscriptions\"]") === null) {
 			const tag = document.createElement("style");
@@ -192,6 +227,186 @@ window.__ModuleLoader__.load({
 				onClick: onCopy,
 				"aria-label": copied ? t("copied") : t("copy")
 			}, copied ? t("copied") : t("copy"));
+		}
+		/** Compact context-window text: 272000 -> "272K". */
+		function formatContext(value) {
+			if (!Number.isInteger(value) || value <= 0) return void 0;
+			return value >= 1000 ? `${Math.round(value / 1000)}K` : String(value);
+		}
+		/** One read-only catalog row (plain DOM, no React ownership). */
+		function catalogRowNode(model, t) {
+			const entry = document.createElement("div");
+			entry.className = "kino-sub-model";
+			const head = document.createElement("div");
+			head.className = "kino-sub-model-head";
+			const id = document.createElement("code");
+			id.className = "kino-sub-model-id";
+			id.textContent = model.id;
+			head.appendChild(id);
+			if (typeof model.name === "string" && model.name !== "" && model.name !== model.id) {
+				const name = document.createElement("span");
+				name.className = "kino-sub-model-name";
+				name.textContent = model.name;
+				head.appendChild(name);
+			}
+			entry.appendChild(head);
+			const tags = [];
+			const context = formatContext(model.contextWindow);
+			if (context !== void 0) tags.push(t("contextTag", { value: context }));
+			if (Array.isArray(model.inputModalities) && model.inputModalities.includes("image")) tags.push(t("imageTag"));
+			const efforts = model.reasoning !== void 0 && model.reasoning !== null && Array.isArray(model.reasoning.efforts) ? model.reasoning.efforts : [];
+			if (efforts.length > 0) {
+				tags.push(t("reasoningTag", { names: efforts.map((effort) => effort.name).join(" / ") }));
+				const def = typeof model.reasoning.defaultEffort === "string" ? efforts.find((effort) => effort.id === model.reasoning.defaultEffort) : void 0;
+				if (def !== void 0) tags.push(t("defaultTag", { name: def.name }));
+			}
+			if (tags.length > 0) {
+				const meta = document.createElement("div");
+				meta.className = "kino-sub-model-meta";
+				for (const text of tags) {
+					const tag = document.createElement("span");
+					tag.className = "kino-sub-model-tag";
+					tag.textContent = text;
+					meta.appendChild(tag);
+				}
+				entry.appendChild(meta);
+			}
+			if (typeof model.description === "string" && model.description !== "") {
+				const desc = document.createElement("p");
+				desc.className = "kino-sub-model-desc";
+				desc.textContent = model.description;
+				entry.appendChild(desc);
+			}
+			return entry;
+		}
+		/** Render the read-only catalog into one mount container. */
+		function renderCatalogInto(container, t, loadCatalog) {
+			container.textContent = "";
+			const section = document.createElement("section");
+			section.className = "kino-sub-catalog";
+			section.setAttribute("aria-label", t("modelsTitle"));
+			const head = document.createElement("div");
+			head.className = "kino-sub-catalog-head";
+			const title = document.createElement("span");
+			title.className = "kino-sub-catalog-title";
+			title.textContent = t("modelsTitle");
+			head.appendChild(title);
+			section.appendChild(head);
+			const status = document.createElement("p");
+			status.className = "kino-sub-muted";
+			status.textContent = t("modelsLoading");
+			section.appendChild(status);
+			container.appendChild(section);
+			loadCatalog().then((models) => {
+				status.remove();
+				if (models.length === 0) {
+					const empty = document.createElement("p");
+					empty.className = "kino-sub-hint";
+					empty.textContent = t("modelsEmpty");
+					section.appendChild(empty);
+					return;
+				}
+				const meta = document.createElement("span");
+				meta.className = "kino-sub-catalog-meta";
+				meta.textContent = t("modelsMeta", { count: models.length });
+				head.appendChild(meta);
+				const list = document.createElement("div");
+				list.className = "kino-sub-catalog-list";
+				for (const model of models) list.appendChild(catalogRowNode(model, t));
+				section.appendChild(list);
+			}, (error) => {
+				status.className = "kino-sub-error";
+				status.textContent = t("modelsError", { message: error?.message ?? String(error) });
+				const retry = document.createElement("button");
+				retry.type = "button";
+				retry.className = "kino-sub-retry";
+				retry.textContent = t("retry");
+				retry.addEventListener("click", () => renderCatalogInto(container, t, loadCatalog));
+				section.appendChild(retry);
+			});
+		}
+		/**
+		 * Models-page augmentation: when the user expands the OpenAI 订阅 row,
+		 * the shell renders its generic settings editor (a hint plus save /
+		 * cancel actions). Hide that chrome and show the live, read-only model
+		 * catalog instead. A MutationObserver re-applies after shell re-renders
+		 * because the shell's React can drop the foreign nodes.
+		 */
+		function installModelCatalogAugmentation(ctx, t) {
+			if (typeof document === "undefined") return () => {};
+			const OPENAI_NAME = "OpenAI 订阅";
+			const catalogCache = { at: 0, value: void 0 };
+			let inflight;
+			const loadCatalog = () => {
+				if (catalogCache.value !== void 0 && Date.now() - catalogCache.at < 60000) return Promise.resolve(catalogCache.value);
+				if (inflight === void 0) {
+					inflight = api("/models").then((result) => {
+						const models = Array.isArray(result.models) ? result.models : [];
+						catalogCache.value = models;
+						catalogCache.at = Date.now();
+						return models;
+					}).finally(() => {
+						inflight = void 0;
+					});
+				}
+				return inflight;
+			};
+			const mounted = new Set();
+			const views = new WeakMap();
+			const augment = (editor) => {
+				for (const child of Array.from(editor.children)) {
+					const cls = typeof child.className === "string" ? child.className : "";
+					if ((cls.includes("advancedHint") || cls.includes("editorActions")) && child.style.display !== "none") child.style.display = "none";
+				}
+				let view = views.get(editor);
+				if (view === void 0) {
+					const container = document.createElement("div");
+					container.className = "kino-sub-catalog-mount";
+					view = { container };
+					views.set(editor, view);
+				}
+				if (!view.container.isConnected) {
+					editor.appendChild(view.container);
+					if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, loadCatalog);
+					return;
+				}
+				if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, loadCatalog);
+			};
+			let scanning = false;
+			const scan = () => {
+				scanning = false;
+				for (const editor of [...mounted]) {
+					if (editor.isConnected) continue;
+					mounted.delete(editor);
+				}
+				for (const span of document.querySelectorAll("span")) {
+					if (span.textContent !== OPENAI_NAME) continue;
+					const li = span.closest("li");
+					if (li === null || li.children.length < 2) continue;
+					const editor = li.children[1];
+					if (!(editor instanceof HTMLElement)) continue;
+					mounted.add(editor);
+					augment(editor);
+				}
+			};
+			const observer = new MutationObserver(() => {
+				if (scanning) return;
+				scanning = true;
+				setTimeout(scan, 120);
+			});
+			observer.observe(document.body, { childList: true, subtree: true });
+			scan();
+			const unsubscribeLocale = ctx.locale.subscribe(() => {
+				for (const editor of mounted) {
+					const view = views.get(editor);
+					if (view !== void 0 && view.container.isConnected) renderCatalogInto(view.container, t, loadCatalog);
+				}
+			});
+			return () => {
+				unsubscribeLocale();
+				observer.disconnect();
+				mounted.clear();
+			};
 		}
 		/**
 		 * The device-login panel: privacy note, the login button, a numbered
@@ -500,6 +715,7 @@ window.__ModuleLoader__.load({
 			ctx.effect(() => ctx.locale.register(NS, { zh, en }), "kino-codex: subscription dictionaries");
 			const t = ctx.locale.bind(NS);
 			const subscribeLocale = (listener) => ctx.locale.subscribe(listener);
+			ctx.effect(() => installModelCatalogAugmentation(ctx, t), "kino-codex: models page catalog augmentation");
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
 				name: "settings.section",
 				id: "third-party-subscriptions",

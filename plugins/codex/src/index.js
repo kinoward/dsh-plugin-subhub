@@ -976,9 +976,10 @@ function sendJson(res, status, payload) {
  * subscriptions page's login API. Token values never cross the wire: the
  * browser only ever sees the public verification URL / one-time code and
  * plain status results. `onAuthChanged` runs after every login/logout so the
- * owning plugin can (un)register the provider route.
+ * owning plugin can (un)register the provider route. `listCatalog` answers
+ * the read-only model catalog route for the Models page card.
  */
-function createLoginController(tokenStore, logger, onAuthChanged) {
+function createLoginController(tokenStore, logger, onAuthChanged, listCatalog) {
 	let pending;
 	const notify = () => {
 		try {
@@ -1062,6 +1063,15 @@ function createLoginController(tokenStore, logger, onAuthChanged) {
 						ok: true,
 						loggedIn: false,
 						authFile: target
+					});
+					return;
+				}
+				if (path === `${LOGIN_API_PATH}/models` && req.method === "GET") {
+					const models = typeof listCatalog === "function" ? await listCatalog() : [];
+					sendJson(res, 200, {
+						ok: true,
+						loggedIn: tokenStore.hasTokens(),
+						models: Array.isArray(models) ? models : []
 					});
 					return;
 				}
@@ -1224,7 +1234,7 @@ function apply(ctx, config) {
 	// subscriptions page drives the device-code flow through these routes.
 	// The webserver service can mount after this row, so the route rides its
 	// own inject scope and appears whenever the service does.
-	const login = createLoginController(tokenStore, ctx.logger, syncRegistration);
+	const login = createLoginController(tokenStore, ctx.logger, syncRegistration, () => adapter.listModels(PROVIDER));
 	ctx.inject(["webServer"], (webCtx) => {
 		webCtx.effect(() => webCtx.webServer.register({
 			kind: "prefix",
