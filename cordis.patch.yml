@@ -1,0 +1,6 @@
+# 集合包的补丁层:为每个插件插一行。
+# 每行的 name 是包名子路径,与 package.json 的 exports 对应;
+# 新插件 = 新建 plugins/<name>/ 目录 + 在此追加一行。
+- insert:
+    - id: kino-hello
+      name: 'kino-dsh-plugins/hello'

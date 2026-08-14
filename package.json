@@ -1,0 +1,22 @@
+{
+  "name": "kino-dsh-plugins",
+  "version": "0.1.0",
+  "description": "Kino 的 DeepSeek Harness 插件集合(一个可安装组合包,内含多个插件)",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./hello": "./plugins/hello/src/index.js"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "plugins"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT"
+}
