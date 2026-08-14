@@ -16,6 +16,7 @@
 - `AGENTS.md`:本文件,AI 行为规范。
 - 插件三件套:`plugins/<name>/src/index.js`(代码)+ `plugins/<name>/README.md`(说明);挂载点 = 根 `package.json` 的 `exports` 子路径 + 根 `cordis.patch.yml` 一行,行 id 统一 `kino-<name>`。
 - 新增插件三步:1) 复制现有插件目录改名;2) 根 `exports` 加 `"./<name>"`;3) 根 `cordis.patch.yml` 追加一行。
+- 客户端插件两层 inject 不可混用:`plugins/<name>/package.json` 的 `dsh.client.inject` 是客户端 npm **包**依赖边;`plugins/<name>/src/client.js` 导出的 `inject` 是模块实际读取的 Cordis **服务**名(只用 `ctx.slots` 就写 `["slots"]`)。
 
 ## 目录地图(按需读取,禁止全仓扫描)
 
@@ -57,6 +58,7 @@ plugins/codex/README.md        插件说明与登录指南
 
 - `node --check` 所有改动的 JS 文件;
 - JSON/YAML 解析校验 `package.json` 与各 `cordis.patch.yml`;
+- 改动客户端插件时,核对 `src/client.js` 导出的 `inject` 全是 Cordis 服务名、`plugins/<name>/package.json` 的 `dsh.client.inject` 是包名;
 - 组装验证(把 `DSH_HOME` 指向临时目录,避免污染 `~/.dsh`):
 
   ```sh

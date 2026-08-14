@@ -10,8 +10,11 @@
 ## 本机开发循环
 
 ```sh
+# 0. 先在仓库里安装依赖(link 模式不会替被链接包装依赖,没有这一步插件会因缺包加载失败)
+pnpm install
+
 # 1. 本地链接安装进演示 profile(首次自动初始化 profile)
-dsh plugin --profile demo add ./
+dsh plugin --profile demo add link:./
 
 # 2. 验证集合层被组装(应出现 # == kino-dsh-plugins 层与各插件行)
 dsh --profile demo --dump-config
@@ -19,6 +22,17 @@ dsh --profile demo --dump-config
 # 3. 真实运行(加载成功会打印 [kino-hello] plugin loaded!)
 dsh --profile demo
 ```
+
+> `link:` 会把 `node_modules/kino-dsh-plugins` 指向本仓库(改代码后重启即生效);`file:`/`./` 则安装快照,每次改代码都要重新 `add`。`pnpm install` 生成的 `node_modules/` 已加入 `.gitignore`,`pnpm-lock.yaml` 建议提交,保证本地开发环境可复现。
+
+## 客户端插件的两层 inject(容易踩坑)
+
+带网页 UI 的插件同时有两处注入声明,含义完全不同:
+
+- `plugins/<name>/package.json` 里的 `dsh.client.inject`:客户端 **npm 包依赖边**,填包名(如 `@deepseek-ai/dsh-client-runtime`);
+- `plugins/<name>/src/client.js` 导出的 `inject`:模块实际读取的 **Cordis 服务名**(如 `slots`、`locale`)。
+
+填反任何一处,web 启动都会停在"等待服务"的报错页。客户端模块只用 `ctx.slots` 时,导出 `const inject = ["slots"]` 即可。
 
 ## 验证
 
