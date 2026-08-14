@@ -693,7 +693,8 @@ var CodexAdapter = class extends LlmAdapter {
 				contextWindow: configured?.contextWindow ?? config.defaultContextWindow
 			},
 			reasoning: {
-				efforts: REASONING_EFFORTS
+				efforts: REASONING_EFFORTS,
+				...config.defaultReasoningEffort !== void 0 ? { defaultEffort: ReasoningEffortId(config.defaultReasoningEffort) } : {}
 			}
 		});
 	}
@@ -822,12 +823,21 @@ function sendJson(res, status, payload) {
 	res.end(body);
 }
 /**
- * Owns the one pending device-login flow and answers the settings page's
- * login API. Token values never cross the wire: the browser only ever sees
- * the public verification URL / one-time code and plain status results.
+ * Owns the one pending device-login flow and answers the third-party
+ * subscriptions page's login API. Token values never cross the wire: the
+ * browser only ever sees the public verification URL / one-time code and
+ * plain status results. `onAuthChanged` runs after every login/logout so the
+ * owning plugin can (un)register the provider route.
  */
-function createLoginController(tokenStore, logger) {
+function createLoginController(tokenStore, logger, onAuthChanged) {
 	let pending;
+	const notify = () => {
+		try {
+			onAuthChanged?.();
+		} catch (error) {
+			logger?.warn(`codex: onAuthChanged failed: ${error?.message ?? error}`);
+		}
+	};
 	return {
 		hasPending: () => pending !== void 0,
 		async handle(req, res) {
@@ -885,8 +895,23 @@ function createLoginController(tokenStore, logger) {
 					const target = tokenStore.writeFilePath();
 					tokenStore.persist(target, authFilePayload(tokens));
 					pending = void 0;
+					notify();
 					sendJson(res, 200, {
 						status: "success",
+						authFile: target
+					});
+					return;
+				}
+				if (path === `${LOGIN_API_PATH}/login/logout` && req.method === "POST") {
+					const target = tokenStore.writeFilePath();
+					try {
+						rmSync(target, { force: true });
+					} catch {}
+					pending = void 0;
+					notify();
+					sendJson(res, 200, {
+						ok: true,
+						loggedIn: false,
 						authFile: target
 					});
 					return;
@@ -925,6 +950,7 @@ const Config = z.object({
 	defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
 	modelsCacheTtlMs: z.number().min(1).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_MODELS_CACHE_TTL_MS),
 	models: z.array(catalogModel).default(DEFAULT_MODELS),
+	defaultReasoningEffort: z.union(["low", "medium", "high"]),
 	streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
 	retryPolicy: RetryPolicySchema
 });
@@ -954,6 +980,7 @@ function resolveModels(models) {
  */
 function resolveAdapterOptions(config) {
 	if (config.defaultContextWindow !== void 0 && (!Number.isInteger(config.defaultContextWindow) || config.defaultContextWindow <= 0)) throw new Error("codex: defaultContextWindow must be a positive integer");
+	if (config.defaultReasoningEffort !== void 0 && config.defaultReasoningEffort !== "low" && config.defaultReasoningEffort !== "medium" && config.defaultReasoningEffort !== "high") throw new Error("codex: defaultReasoningEffort must be low, medium, or high");
 	const streamIdleTimeoutMs = config.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS;
 	if (!Number.isFinite(streamIdleTimeoutMs) || streamIdleTimeoutMs <= 0 || streamIdleTimeoutMs > MAX_TIMER_DELAY_MS) throw new Error(`codex: streamIdleTimeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`);
 	const modelsCacheTtlMs = config.modelsCacheTtlMs ?? DEFAULT_MODELS_CACHE_TTL_MS;
@@ -965,6 +992,7 @@ function resolveAdapterOptions(config) {
 		defaultContextWindow: config.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
 		modelsCacheTtlMs,
 		models: resolveModels(config.models),
+		defaultReasoningEffort: config.defaultReasoningEffort,
 		streamIdleTimeoutMs,
 		retryPolicy: resolveRetryPolicy(config.retryPolicy, "codex: retryPolicy")
 	};
@@ -1009,9 +1037,26 @@ function apply(ctx, config) {
 		settingsNs: NS,
 		settingsPath: []
 	}]);
-	const registration = ctx.llm.registerAdapter([PROVIDER], adapter);
-	let registeredPolicy = options().retryPolicy;
+	// The provider route only appears once the user authenticated through the
+	// plugin's own login flow: registering the adapter is what puts the
+	// provider into the model picker and the Models page (both refresh on
+	// `llm/adapters-updated`), so login and logout gate visibility directly.
+	let registration;
+	let registeredPolicy;
+	const syncRegistration = () => {
+		const shouldRegister = tokenStore.hasTokens();
+		if (shouldRegister && registration === void 0) {
+			registration = ctx.llm.registerAdapter([PROVIDER], adapter);
+			registeredPolicy = options().retryPolicy;
+		} else if (!shouldRegister && registration !== void 0) {
+			registration();
+			registration = void 0;
+			registeredPolicy = void 0;
+		}
+	};
+	syncRegistration();
 	const ensureRegistrationFacts = () => {
+		if (registration === void 0) return;
 		const policy = options().retryPolicy;
 		if (deepEqualJson(policy, registeredPolicy)) return;
 		registration.replace([PROVIDER]);
@@ -1023,11 +1068,11 @@ function apply(ctx, config) {
 		},
 		onChange: ensureRegistrationFacts
 	});
-	// Browser-side login API (web profiles only): the settings page's Codex
-	// section drives the device-code flow through these routes. The webserver
-	// service can mount after this row, so the route rides its own inject
-	// scope and appears whenever the service does.
-	const login = createLoginController(tokenStore, ctx.logger);
+	// Browser-side login API (web profiles only): the third-party
+	// subscriptions page drives the device-code flow through these routes.
+	// The webserver service can mount after this row, so the route rides its
+	// own inject scope and appears whenever the service does.
+	const login = createLoginController(tokenStore, ctx.logger, syncRegistration);
 	ctx.inject(["webServer"], (webCtx) => {
 		webCtx.effect(() => webCtx.webServer.register({
 			kind: "prefix",

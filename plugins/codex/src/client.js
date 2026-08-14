@@ -1,12 +1,11 @@
-// Client half of the kino-codex plugin: the ChatGPT device-code login
-// integrated into the Models settings domain (no sidebar section). Two
-// official surfaces carry it:
-//   - `settings.onboarding`: a step in the model-settings onboarding layer
-//     (the same layer as the official DeepSeek credential dialog) that opens
-//     a login modal when the app is fresh and no Codex credential exists;
-//   - `settings.action`: a header button "登录 OpenAI 订阅" on the settings
-//     panel, available any time until the user is logged in.
-// Both render the same LoginPanel. Hand-written client bundle in the shell's
+// Client half of the kino-codex plugin: the "第三方订阅" settings section —
+// one hub page where every third-party subscription provider lives. Each
+// provider card shares the same login-modal surface; today OpenAI (ChatGPT /
+// Codex subscription) is wired end to end, and further providers (Anthropic,
+// 火山方舟 Coding Plan, …) plug in by adding a card entry plus their own
+// host-side auth endpoints. Only after a successful login does the host
+// register the provider route, which is what makes it appear in the Models
+// page and the model picker. Hand-written client bundle in the shell's
 // module-loader format (no build step).
 window.__ModuleLoader__.load({
 	id: "kino-dsh-plugins/codex",
@@ -17,23 +16,30 @@ window.__ModuleLoader__.load({
 		const API = "/api/kino-codex";
 		const POLL_MS = 2500;
 		const css = [
-			".kino-codex-copy{color:var(--dsw-alias-label-secondary);font-size:14px;line-height:22px;margin:0 0 16px}",
+			".kino-sub-copy{color:var(--dsw-alias-label-secondary);font-size:14px;line-height:22px;margin:0 0 16px}",
+			".kino-sub-cards{display:flex;flex-direction:column;gap:10px}",
+			".kino-sub-card{border:1px solid var(--dsw-alias-border-l2,rgba(127,127,127,.25));border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;background:var(--dsw-alias-bg-module-platform,transparent)}",
+			".kino-sub-head{display:flex;align-items:center;gap:10px}",
+			".kino-sub-name{color:var(--dsw-alias-label-primary,#fff);font-size:14px;font-weight:500;line-height:22px}",
+			".kino-sub-tag{border:1px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));color:var(--dsw-alias-label-secondary,#ccc);border-radius:4px;flex:none;padding:1px 6px;font-size:11px;line-height:16px}",
+			".kino-sub-tag-ok{color:var(--dsw-alias-state-success-primary,#46a758);border-color:currentColor}",
+			".kino-sub-desc{color:var(--dsw-alias-label-tertiary,#999);font-size:13px;line-height:20px;margin:0}",
+			".kino-sub-actions{display:flex;align-items:center;gap:8px}",
 			".kino-codex-row{display:flex;align-items:center;gap:8px;margin:8px 0}",
 			".kino-codex-label{min-width:64px;font-size:13px;color:var(--dsw-alias-label-secondary)}",
 			".kino-codex-code{flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--dsw-alias-fill-secondary,rgba(127,127,127,.12));padding:6px 10px;border-radius:6px;overflow-wrap:anywhere}",
 			".kino-codex-usercode{flex:0 1 auto;font-size:15px;letter-spacing:.06em}",
 			".kino-codex-hint{font-size:13px;color:var(--dsw-alias-label-secondary);margin:8px 0 16px}",
-			".kino-codex-success{color:var(--dsw-alias-state-success,var(--dsw-alias-label-primary));font-size:14px;line-height:22px;margin:0 0 12px}",
+			".kino-codex-success{color:var(--dsw-alias-state-success-primary,#46a758);font-size:14px;line-height:22px;margin:0 0 12px}",
 			".kino-codex-error{color:var(--dsw-alias-state-error-primary,#e5484d);font-size:14px;line-height:22px;margin:0 0 12px}",
 			".kino-codex-btn{font:inherit;font-size:14px;padding:6px 14px;border-radius:6px;border:1px solid var(--dsw-alias-border,rgba(127,127,127,.35));background:var(--dsw-alias-fill,rgba(255,255,255,.04));color:var(--dsw-alias-label-primary,#fff);cursor:pointer}",
 			".kino-codex-btn:hover{border-color:var(--dsw-alias-label-secondary)}",
 			".kino-codex-primary{background:var(--dsw-alias-accent,rgba(99,126,255,.16))}",
-			".kino-codex-header-btn{box-sizing:border-box;height:28px;font:inherit;font-size:12px;cursor:pointer;background:0 0;border:1px solid var(--dsw-alias-border-l2,rgba(127,127,127,.35));border-radius:14px;color:var(--dsw-alias-label-primary,#fff);padding:0 10px;line-height:18px}",
-			".kino-codex-header-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}"
+			".kino-codex-copy{color:var(--dsw-alias-label-secondary);font-size:14px;line-height:22px;margin:0 0 16px}"
 		].join("\n");
-		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=\"kino-codex\"]") === null) {
+		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=\"kino-subscriptions\"]") === null) {
 			const tag = document.createElement("style");
-			tag.dataset.pluginCss = "kino-codex";
+			tag.dataset.pluginCss = "kino-subscriptions";
 			tag.textContent = css;
 			document.head.appendChild(tag);
 		}
@@ -56,9 +62,9 @@ window.__ModuleLoader__.load({
 			return body;
 		}
 		/**
-		 * The device-login panel: status line, the login button, and the
-		 * URL + one-time code display with automatic polling. Callers wrap it
-		 * in their own modal and get `onDone` when a login just succeeded.
+		 * The device-login panel: the login button, the URL + one-time code
+		 * display with copy buttons, and automatic polling. Callers wrap it in
+		 * their own modal and get `onDone` when a login just succeeded.
 		 */
 		function LoginPanel(props) {
 			const [status, setStatus] = React.useState({ phase: "loading" });
@@ -156,8 +162,8 @@ window.__ModuleLoader__.load({
 				className: extra ?? "kino-codex-btn",
 				onClick
 			}, label);
-			return h("div", { className: "kino-codex" }, [
-				h("p", { className: "kino-codex-copy", key: "copy" }, "使用 ChatGPT / Codex 订阅账户登录,即可在模型选择器里选用 GPT 模型(无需 API Key)。本插件只使用自己保存的凭据,不会读取 codex CLI 等其它程序的登录信息。"),
+			return h("div", null, [
+				h("p", { className: "kino-codex-copy", key: "copy" }, "使用 ChatGPT / Codex 订阅账户登录,登录成功后「OpenAI 订阅」才会出现在模型选择器里。本插件只使用自己保存的凭据,不会读取 codex CLI 等其它程序的登录信息。"),
 				status.phase === "loading" ? h("p", { key: "body" }, "正在读取登录状态…") : status.phase === "error" ? h("p", {
 					className: "kino-codex-error",
 					key: "body"
@@ -176,104 +182,135 @@ window.__ModuleLoader__.load({
 				]) : login.phase === "success" ? h("p", {
 					className: "kino-codex-success",
 					key: "body"
-				}, `✓ 登录成功,凭据已保存到 ${login.authFile}。现在可以在模型选择器里选择「OpenAI 订阅」提供商。`) : login.phase === "expired" ? h("div", { key: "body" }, [
+				}, `✓ 登录成功,凭据已保存到 ${login.authFile}。「OpenAI 订阅」现已出现在模型选择器里。`) : login.phase === "expired" ? h("div", { key: "body" }, [
 					h("p", { className: "kino-codex-error" }, "一次性码已过期,请重新登录。"),
 					button("重新登录", () => void start())
 				]) : login.phase === "error" ? h("div", { key: "body" }, [
 					h("p", { className: "kino-codex-error" }, `登录失败:${login.message}`),
 					button("重试", () => void start())
-				]) : status.loggedIn === true ? h("div", { key: "body" }, [
-					h("p", { className: "kino-codex-success" }, "✓ 已登录,「OpenAI 订阅」提供商已就绪。"),
-					h("p", { className: "kino-codex-hint" }, `凭据文件:${status.authFile}`)
-				]) : button("使用 ChatGPT 账号登录", () => void start(), "kino-codex-btn kino-codex-primary")
+				]) : status.loggedIn === true ? h("p", {
+					className: "kino-codex-success",
+					key: "body"
+				}, "✓ 已登录,「OpenAI 订阅」提供商已就绪。") : button("使用 ChatGPT 账号登录", () => void start(), "kino-codex-btn kino-codex-primary")
 			]);
 		}
 		/**
-		 * Onboarding step in the model-settings layer (the same surface the
-		 * official DeepSeek credential dialog uses). Renders nothing and
-		 * completes itself when credentials already exist or the status check
-		 * fails; otherwise it opens the login modal until the user logs in or
-		 * skips.
+		 * One provider card in the hub. `wired` providers offer the shared
+		 * login modal; un-wired ones show a "coming soon" tag.
 		 */
-		function CodexOnboardingStep(props) {
-			const { complete } = props;
-			const [needsLogin, setNeedsLogin] = React.useState(false);
-			const checked = React.useRef(false);
-			const check = React.useCallback(async () => {
-				try {
-					const result = await api("/login/status");
-					if (result.loggedIn === true) {
-						complete();
-						return;
-					}
-					setNeedsLogin(true);
-				} catch {
-					complete();
-				}
-			}, [complete]);
-			React.useEffect(() => {
-				if (checked.current) return;
-				checked.current = true;
-				void check();
-			}, [check]);
-			if (!needsLogin) return null;
-			const h = React.createElement;
-			return h(Primitives.Modal, {
-				open: true,
-				onClose: () => complete(),
-				title: "登录 OpenAI 订阅",
-				closeLabel: "稍后再说"
-			}, h(LoginPanel, { onDone: () => complete() }));
-		}
-		/** Header action: a login button on the settings panel until logged in. */
-		function CodexLoginAction() {
-			const [phase, setPhase] = React.useState("loading");
+		function ProviderCard(props) {
+			const { provider, loggedIn, authFile, onChanged } = props;
 			const [open, setOpen] = React.useState(false);
-			React.useEffect(() => {
-				let alive = true;
-				void (async () => {
-					try {
-						const result = await api("/login/status");
-						if (alive) setPhase(result.loggedIn === true ? "logged-in" : "ready");
-					} catch {
-						if (alive) setPhase("ready");
-					}
-				})();
-				return () => {
-					alive = false;
-				};
-			}, []);
-			if (phase !== "ready") return null;
+			const [busy, setBusy] = React.useState(false);
+			const [error, setError] = React.useState("");
 			const h = React.createElement;
-			return h(React.Fragment, null, [
-				h("button", {
-					type: "button",
-					key: "trigger",
-					className: "kino-codex-header-btn",
-					onClick: () => setOpen(true)
-				}, "登录 OpenAI 订阅"),
+			const button = (label, onClick, extra) => h("button", {
+				type: "button",
+				className: extra ?? "kino-codex-btn",
+				onClick
+			}, label);
+			const logout = async () => {
+				setBusy(true);
+				setError("");
+				try {
+					await api("/login/logout", { method: "POST", body: "{}" });
+					onChanged?.();
+				} catch (err) {
+					setError(err?.message ?? String(err));
+				} finally {
+					setBusy(false);
+				}
+			};
+			return h("div", { className: "kino-sub-card" }, [
+				h("div", { className: "kino-sub-head", key: "head" }, [
+					h("span", { className: "kino-sub-name" }, provider.name),
+					provider.wired === true && loggedIn === true ? h("span", { className: "kino-sub-tag kino-sub-tag-ok" }, "已登录") : provider.wired !== true ? h("span", { className: "kino-sub-tag" }, "即将支持") : h("span", { className: "kino-sub-tag" }, "未登录")
+				]),
+				h("p", { className: "kino-sub-desc", key: "desc" }, provider.description),
+				provider.wired === true ? h("div", { className: "kino-sub-actions", key: "actions" }, [
+					button(loggedIn === true ? "重新登录" : "登录", () => setOpen(true), "kino-codex-btn kino-codex-primary"),
+					loggedIn === true ? button(busy ? "退出中…" : "退出登录", () => void logout()) : null,
+					loggedIn === true ? h("span", { className: "kino-sub-desc", style: { overflowWrap: "anywhere", fontSize: "12px" } }, authFile ?? "") : null
+				]) : null,
+				error !== "" ? h("p", { className: "kino-codex-error", key: "error", style: { margin: 0 } }, error) : null,
 				open ? h(Primitives.Modal, {
 					key: "modal",
 					open: true,
 					onClose: () => setOpen(false),
-					title: "登录 OpenAI 订阅",
+					title: `登录 ${provider.name}`,
 					closeLabel: "关闭"
-				}, h(LoginPanel, { onDone: () => setOpen(false) })) : null
+				}, h(LoginPanel, {
+					onDone: () => {
+						setOpen(false);
+						onChanged?.();
+					}
+				})) : null
+			]);
+		}
+		/** The hub page content. */
+		function SubscriptionsSection() {
+			const [state, setState] = React.useState({ phase: "loading" });
+			const refresh = React.useCallback(async () => {
+				try {
+					const result = await api("/login/status");
+					setState({
+						phase: "ready",
+						loggedIn: result.loggedIn === true,
+						authFile: result.authFile
+					});
+				} catch (error) {
+					setState({
+						phase: "error",
+						message: error?.message ?? String(error)
+					});
+				}
+			}, []);
+			React.useEffect(() => {
+				void refresh();
+			}, [refresh]);
+			const h = React.createElement;
+			const providers = [
+				{
+					id: "codex",
+					name: "OpenAI 订阅",
+					description: "ChatGPT / Codex 订阅账户,提供 GPT 系列模型。登录成功后自动出现在「模型」页与模型选择器。",
+					wired: true
+				},
+				{
+					id: "anthropic",
+					name: "Anthropic 订阅",
+					description: "Claude 系列模型。登录流程待接入。",
+					wired: false
+				},
+				{
+					id: "volcano",
+					name: "火山方舟 Coding Plan",
+					description: "豆包 / 深度求索系列模型。登录流程待接入。",
+					wired: false
+				}
+			];
+			return h("div", null, [
+				h("p", { className: "kino-sub-copy", key: "copy" }, "在这里管理第三方订阅服务:登录成功后,对应服务才会出现在「模型」页;退出登录后即从「模型」页移除。模型与思考深度在「模型」页的服务行里设置。"),
+				state.phase === "error" ? h("p", { className: "kino-codex-error", key: "error" }, `无法读取登录状态:${state.message}`) : null,
+				h("div", { className: "kino-sub-cards", key: "cards" }, providers.map((provider) => {
+					const props = {
+						provider,
+						loggedIn: provider.wired === true && state.loggedIn === true,
+						authFile: state.authFile,
+						onChanged: () => void refresh()
+					};
+					return h(ProviderCard, { ...props, key: provider.id });
+				}))
 			]);
 		}
 		function apply(ctx) {
-			ctx.slots.inject("settings.onboarding", () => ctx.slots.register({
-				name: "settings.onboarding",
-				id: "codex-login",
-				order: 10,
+			ctx.slots.inject("settings.section", () => ctx.slots.register({
+				name: "settings.section",
+				id: "third-party-subscriptions",
+				order: 20,
+				label: () => "第三方订阅",
 				inject: () => ({})
-			}, CodexOnboardingStep));
-			ctx.slots.inject("settings.action", () => ctx.slots.register({
-				name: "settings.action",
-				id: "codex-login",
-				order: 0,
-				inject: () => ({})
-			}, CodexLoginAction));
+			}, SubscriptionsSection));
 		}
 		return { apply, inject };
 	}

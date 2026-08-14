@@ -48,7 +48,7 @@ dsh --profile demo
 
 ## codex 插件:登录与验证
 
-`kino-codex` 用 Codex 订阅账户调用 GPT 模型,需要先登录。普通用户在 web 设置面板右上角点「登录 OpenAI 订阅」按钮(新会话/空会话时打开设置会自动弹出同款引导框,挂在官方 DeepSeek 凭证引导同一层)即可;无头 profile 或偏好终端时运行随包脚本:
+`kino-codex` 用 Codex 订阅账户调用 GPT 模型,需要先登录。普通用户在设置面板侧边栏的 **第三方订阅** 页,对 **OpenAI 订阅** 卡片点「登录」即可;无头 profile 或偏好终端时运行随包脚本:
 
 ```sh
 node plugins/codex/login.js
@@ -56,12 +56,14 @@ node plugins/codex/login.js
 
 脚本会打印一个链接和一次性码,在浏览器打开链接、输入码后,把凭据写到 `~/.kino-dsh/codex-auth.json`(权限 0600)。隐私约束:插件只读写自己的凭据文件,不读取 codex CLI 的 `~/.codex/auth.json` 或其它程序的认证文件;每位用户安装后都必须通过插件完成一次登录授权。
 
-插件同时带客户端半边:登录 API 是宿主插件注册的 `webServer` 前缀路由(`/api/kino-codex/*`,只接受本机同源请求),设置域 UI 是 `plugins/codex/src/client.js`(手写模块加载器格式),由 `plugins/codex/package.json` 的 `dsh.client` 声明,并随 `settings.onboarding`(引导弹窗)与 `settings.action`(头部按钮)两个插槽挂进模型设置域。
+插件同时带客户端半边:登录 API 是宿主插件注册的 `webServer` 前缀路由(`/api/kino-codex/*`,只接受本机同源请求;含 `status`/`start`/`poll`/`logout`),「第三方订阅」中心页 UI 是 `plugins/codex/src/client.js`(手写模块加载器格式),由 `plugins/codex/package.json` 的 `dsh.client` 声明,并随 `settings.section` 插槽挂进设置侧边栏。
+
+**登录门控**:`ctx.llm` 上的 provider 路由只有凭据存在时才注册(登录成功即注册、退出登录即注销),因此「模型」页与模型选择器只显示已认证的服务;「模型」页通过 `llm/adapters-updated` 事件自动刷新。接入新订阅商(如 Anthropic、火山方舟)的约定:宿主插件提供自己的认证端点与凭据文件,客户端在中心页的 provider 数组里加一张卡片,复用同一个登录弹窗组件。
 
 验证要点:
 
-- 登录后启动 harness,在模型选择器里应能看到 Codex 提供商及其模型;
-- 登录 API 可用 curl 检查:`GET /api/kino-codex/login/status` 应返回 `{ok:true,loggedIn:...}`;
+- 登录后启动 harness,在模型选择器里应能看到「OpenAI 订阅」提供商及其模型;退出登录后应消失;
+- 登录 API 可用 curl 检查:`GET /api/kino-codex/login/status` 应返回 `{ok:true,loggedIn:...}`,`POST /login/logout` 删除凭据并注销路由;
 - 若模型列表接口不可用,会回退到静态备用模型(gpt-5.6-sol、gpt-5.6-terra、gpt-5.5、gpt-5.4、gpt-5.3-codex-spark);
 - 鉴权文件权限应为 0600、不要提交进 git;token 不会打印到日志或终端,也不会经过登录 API 回传浏览器。
 
