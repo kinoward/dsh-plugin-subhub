@@ -22,13 +22,12 @@ kino-ds-harness-plugin/
 
 ## 插件清单
 
-- **kino-hello**(`kino-dsh-plugins/hello`):示例插件,验证"组合包开发 → 安装 → 加载"全链路。
-- **kino-codex**(`kino-dsh-plugins/codex`):用 Codex 订阅账户(ChatGPT OAuth)调用 GPT 模型的 LLM 适配器,在模型选择器里以「OpenAI 订阅」提供商出现。
+- **kino-subhub**(`kino-dsh-plugins/subhub`):第三方订阅服务接入插件,提供设置侧边栏的「第三方订阅」中心页;当前接入 OpenAI 订阅(ChatGPT OAuth),登录成功后以「OpenAI 订阅」提供商出现在「模型」页与模型选择器里,后续订阅商在此扩展。
 
-### Codex 快速上手
+### Subhub 快速上手
 
-1. 打开设置面板侧边栏的 **第三方订阅** 页,在 **OpenAI 订阅** 卡片点「登录」,按提示在浏览器里输入一次性码。每位用户安装后都需要完成一次登录授权——插件只使用自己保存的凭据,不会读取 codex CLI 等其它程序的登录信息。
-2. 登录成功后「OpenAI 订阅」提供商才会出现在「模型」页与模型选择器里,选它即可使用;模型与思考深度在「模型」页的服务行里设置。详见 [`plugins/codex/README.md`](plugins/codex/README.md)。
+1. 打开设置面板侧边栏的 **第三方订阅** 页,在 **OpenAI 订阅** 卡片点「登录」,按提示在浏览器里输入一次性码。每位用户安装后都需要完成一次登录授权——插件只使用自己保存的凭据,不会读取其它程序(如官方 Codex CLI)的登录信息。
+2. 登录成功后「OpenAI 订阅」提供商才会出现在「模型」页与模型选择器里,选它即可使用;模型与思考深度在「模型」页的服务行里设置。详见 [`plugins/subhub/README.md`](plugins/subhub/README.md)。
 
 ## 快速使用
 
@@ -40,8 +39,8 @@ dsh plugin --profile <name> add github:<you>/kino-ds-harness-plugin
 **只想要部分插件**:在自己 profile 的 `cordis.patch.yml` 中按 `id` 禁用对应行(用户层在所有 bundle 层之后应用、按 id 胜出):
 
 ```yaml
-- id: kino-hello
-  name: 'kino-dsh-plugins/hello'
+- id: kino-subhub
+  name: 'kino-dsh-plugins/subhub'
   disabled: true
 ```
 

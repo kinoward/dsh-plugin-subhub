@@ -33,12 +33,12 @@ index.js                        空入口,不放代码
 plugins/README.md               插件目录约定
 plugins/<name>/src/index.js     插件代码(export const name + export function apply)
 plugins/<name>/README.md        插件说明与禁用方式
-plugins/codex/src/index.js     插件代码
-plugins/codex/src/device-flow.js 共享的 OpenAI 设备码登录流程
-plugins/codex/src/client.js    客户端半边:「第三方订阅」中心页(手写模块加载器格式)
-plugins/codex/package.json     codex 插件的 dsh.client 客户端声明与 ./client 出口
-plugins/codex/login.js         独立登录脚本,node 直接运行
-plugins/codex/README.md        插件说明与登录指南
+plugins/subhub/src/index.js     插件代码(宿主半边:LLM 适配器与登录 API)
+plugins/subhub/src/device-flow.js 共享的 OpenAI 设备码登录流程
+plugins/subhub/src/client.js    客户端半边:「第三方订阅」中心页(手写模块加载器格式)
+plugins/subhub/package.json     subhub 插件的 dsh.client 客户端声明与 ./client 出口
+plugins/subhub/login.js         独立登录脚本,node 直接运行
+plugins/subhub/README.md        插件说明与登录指南
 ```
 
 按需读取的最小集:
