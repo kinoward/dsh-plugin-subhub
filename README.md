@@ -20,6 +20,16 @@ kino-ds-harness-plugin/
         └── README.md     # 功能与禁用说明
 ```
 
+## 插件清单
+
+- **kino-hello**(`kino-dsh-plugins/hello`):示例插件,验证"组合包开发 → 安装 → 加载"全链路。
+- **kino-codex**(`kino-dsh-plugins/codex`):用 Codex 订阅账户(ChatGPT OAuth)调用 GPT 模型的 LLM 适配器,在模型选择器里以 Codex 提供商出现。
+
+### Codex 快速上手
+
+1. 登录二选一:已用官方 codex CLI 登录过(插件读 `~/.codex/auth.json`);或运行 `node plugins/codex/login.js` 完成设备码登录。
+2. 登录后在模型选择器里选 Codex 提供商即可使用。详见 [`plugins/codex/README.md`](plugins/codex/README.md)。
+
 ## 快速使用
 
 ```sh

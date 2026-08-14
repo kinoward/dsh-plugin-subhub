@@ -31,6 +31,9 @@ index.js                        空入口,不放代码
 plugins/README.md               插件目录约定
 plugins/<name>/src/index.js     插件代码(export const name + export function apply)
 plugins/<name>/README.md        插件说明与禁用方式
+plugins/codex/src/index.js     插件代码
+plugins/codex/login.js         独立登录脚本,node 直接运行
+plugins/codex/README.md        插件说明与登录指南
 ```
 
 按需读取的最小集:

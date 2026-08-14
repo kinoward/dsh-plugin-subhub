@@ -4,3 +4,5 @@
 - insert:
     - id: kino-hello
       name: 'kino-dsh-plugins/hello'
+    - id: kino-codex
+      name: 'kino-dsh-plugins/codex'
