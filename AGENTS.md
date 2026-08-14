@@ -17,6 +17,29 @@
 - 插件三件套:`plugins/<name>/src/index.js`(代码)+ `plugins/<name>/README.md`(说明);挂载点 = 根 `package.json` 的 `exports` 子路径 + 根 `cordis.patch.yml` 一行,行 id 统一 `kino-<name>`。
 - 新增插件三步:1) 复制现有插件目录改名;2) 根 `exports` 加 `"./<name>"`;3) 根 `cordis.patch.yml` 追加一行。
 
+## 目录地图(按需读取,禁止全仓扫描)
+
+开始工作前先读本文件;需要具体内容时按地图直达目标路径,用 read 工具读取,不要用 `glob`/`find` 枚举全树、不要 `cat` 整个仓库:
+
+```
+AGENTS.md                       AI 约束与本文地图(先读)
+README.md                       人类:项目介绍与快速使用
+docs/development.md             人类:开发循环、验证、新增插件、分发
+package.json                    唯一清单:dsh.bundle.patch、exports 插件子路径、依赖
+cordis.patch.yml                唯一补丁层:每个插件一行
+index.js                        空入口,不放代码
+plugins/README.md               插件目录约定
+plugins/<name>/src/index.js     插件代码(export const name + export function apply)
+plugins/<name>/README.md        插件说明与禁用方式
+```
+
+按需读取的最小集:
+
+- 改动某个插件:读该插件目录 + 根 `package.json` 的 `exports` + 根 `cordis.patch.yml`;
+- 改动集合层(清单/补丁/依赖):读根 `package.json` 与 `cordis.patch.yml`;
+- 改动文档:只读目标文档本身;
+- 地图未覆盖到的新文件:先更新本目录地图,再读取。
+
 ## 提交规范(每次提交都必须遵守)
 
 - Conventional Commits;**首行用简单英文**,祈使语气、≤72 字符,如 `feat(plugins): add kino-<name> plugin`。
