@@ -31,7 +31,7 @@
 
 登录完成后,在 DeepSeek Harness 的模型选择器里把提供商切到「OpenAI 订阅」,再选一个模型即可。**模型列表完全动态**:实时取自你账户的 `/models` 接口(缓存 5 分钟),接口返回什么就显示什么;内部条目(如 `-wm` Work Mode 路由别名、自动审查模型)会按 `visibility: hide` 过滤,与官方 codex CLI 的显示一致;只有接口不可达时才用内置备用列表兜底,静态列表绝不混入在线展示。上下文窗口也直接采用接口的 `context_window` 字段。
 
-**设置思考深度**:在「模型」页的「OpenAI 订阅」服务行点「编辑」可配置默认上下文窗口、默认思考深度(`defaultReasoningEffort`)等;单次会话的模型与思考深度在模型选择器里随时切换。可选档位由模型接口**动态下发、不写死**:每个模型展示它自己支持的档位(如 gpt-5.6-sol 支持 `low`~`ultra` 六档,gpt-5.5 支持 `low`~`xhigh` 四档),默认档也取自接口。注意:`ultra` 在发送到后端时会映射为 `max`(线上端点不直接接受 ultra,与官方 codex CLI 的做法一致),选择器里仍显示 Ultra。**ultra 的真实含义**:官方 CLI 里 Ultra = max 推理 + 代理层切换到主动多智能体模式(自动任务委派,见 codex-rs `multi_agents.rs`:Ultra → `MultiAgentMode::Proactive`);模型侧推理上限就是 max。在本平台,插件实现了等价机制(**ultra 自动委派**):选择 ultra 档且会话中存在 subagent 工具时,每次请求会自动在系统提示里注入主动委派指令——模型把独立子任务拆解后交给后台 subagent 并行执行、自己负责收集验证与最终汇总(对应官方 CLI 的 Ultra → 主动多智能体模式)。
+**设置思考深度**:在「模型」页的「OpenAI 订阅」服务行点「编辑」可配置默认上下文窗口、默认思考深度(`defaultReasoningEffort`)等;单次会话的模型与思考深度在模型选择器里随时切换。可选档位由模型接口**动态下发、不写死**:每个模型展示它自己支持的档位(如 gpt-5.6-sol 支持 `low`~`ultra` 六档,gpt-5.5 支持 `low`~`xhigh` 四档),默认档也取自接口。注意:`ultra` 在发送到后端时会映射为 `max`(线上端点不直接接受 ultra,与官方 codex CLI 的做法一致),选择器里仍显示 Ultra。**ultra 的真实含义**:官方 CLI 里 Ultra = max 推理 + 代理层切换到主动多智能体模式(自动任务委派,见 codex-rs `multi_agents.rs`:Ultra → `MultiAgentMode::Proactive`);模型侧推理上限就是 max。在本平台,插件实现了等价机制(**ultra 自动委派**):选择 ultra 档且会话中存在 subagent 工具时,每次请求会自动在系统提示里注入主动委派指令——模型把独立子任务拆解后交给后台 subagent 并行执行、自己负责收集验证与最终汇总(对应官方 CLI 的 Ultra → 主动多智能体模式)。**注意:子代理调用与思考深度无关**——subagent 工具对所有模型、所有档位都可用(它们由 agent 预设无条件挂载,harness 的工具装配不按模型或档位过滤);任何档位下模型都可以按需调用子代理,ultra 只是把委派升级为主动并行模式,并不是委派能力的开关。
 
 ## 可选设置
 
