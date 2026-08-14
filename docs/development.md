@@ -48,7 +48,7 @@ dsh --profile demo
 
 ## codex 插件:登录与验证
 
-`kino-codex` 用 Codex 订阅账户调用 GPT 模型,需要先登录。普通用户在 web 设置面板的 **Codex** 分区点「使用 ChatGPT 账号登录」即可(页面展示链接与一次性码、自动完成);无头 profile 或偏好终端时运行随包脚本:
+`kino-codex` 用 Codex 订阅账户调用 GPT 模型,需要先登录。普通用户在 web 设置面板右上角点「登录 OpenAI 订阅」按钮(新会话/空会话时打开设置会自动弹出同款引导框,挂在官方 DeepSeek 凭证引导同一层)即可;无头 profile 或偏好终端时运行随包脚本:
 
 ```sh
 node plugins/codex/login.js
@@ -56,7 +56,7 @@ node plugins/codex/login.js
 
 脚本会打印一个链接和一次性码,在浏览器打开链接、输入码后,把凭据写到 `~/.kino-dsh/codex-auth.json`(权限 0600)。隐私约束:插件只读写自己的凭据文件,不读取 codex CLI 的 `~/.codex/auth.json` 或其它程序的认证文件;每位用户安装后都必须通过插件完成一次登录授权。
 
-插件同时带客户端半边:登录 API 是宿主插件注册的 `webServer` 前缀路由(`/api/kino-codex/*`,只接受本机同源请求),设置页 UI 是 `plugins/codex/src/client.js`(手写模块加载器格式),由 `plugins/codex/package.json` 的 `dsh.client` 声明并随 `settings.section` 插槽挂进设置面板。
+插件同时带客户端半边:登录 API 是宿主插件注册的 `webServer` 前缀路由(`/api/kino-codex/*`,只接受本机同源请求),设置域 UI 是 `plugins/codex/src/client.js`(手写模块加载器格式),由 `plugins/codex/package.json` 的 `dsh.client` 声明,并随 `settings.onboarding`(引导弹窗)与 `settings.action`(头部按钮)两个插槽挂进模型设置域。
 
 验证要点:
 

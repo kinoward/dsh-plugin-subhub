@@ -23,12 +23,12 @@ kino-ds-harness-plugin/
 ## 插件清单
 
 - **kino-hello**(`kino-dsh-plugins/hello`):示例插件,验证"组合包开发 → 安装 → 加载"全链路。
-- **kino-codex**(`kino-dsh-plugins/codex`):用 Codex 订阅账户(ChatGPT OAuth)调用 GPT 模型的 LLM 适配器,在模型选择器里以 Codex 提供商出现。
+- **kino-codex**(`kino-dsh-plugins/codex`):用 Codex 订阅账户(ChatGPT OAuth)调用 GPT 模型的 LLM 适配器,在模型选择器里以「OpenAI 订阅」提供商出现。
 
 ### Codex 快速上手
 
-1. 打开设置面板的 **Codex** 分区,点「使用 ChatGPT 账号登录」,按页面提示在浏览器里输入一次性码。每位用户安装后都需要完成一次登录授权——插件只使用自己保存的凭据,不会读取 codex CLI 等其它程序的登录信息。
-2. 登录后在模型选择器里选 Codex 提供商即可使用。详见 [`plugins/codex/README.md`](plugins/codex/README.md)。
+1. 打开设置面板,点右上角的「登录 OpenAI 订阅」按钮(新会话时也会自动弹出引导框),按提示在浏览器里输入一次性码。每位用户安装后都需要完成一次登录授权——插件只使用自己保存的凭据,不会读取 codex CLI 等其它程序的登录信息。
+2. 登录后在模型选择器里选「OpenAI 订阅」提供商即可使用。详见 [`plugins/codex/README.md`](plugins/codex/README.md)。
 
 ## 快速使用
 

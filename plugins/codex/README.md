@@ -1,6 +1,6 @@
 # kino-codex
 
-用 Codex 订阅账户(ChatGPT OAuth)把 GPT 模型接进 DeepSeek Harness 的 LLM 适配器。它在 `ctx.llm` 上注册 provider 路由 `codex`(显示名 Codex),用你的 Codex 订阅账户的 token 调用 GPT 模型。由根 `cordis.patch.yml` 以子路径 `kino-dsh-plugins/codex` 挂载。
+用 Codex 订阅账户(ChatGPT OAuth)把 GPT 模型接进 DeepSeek Harness 的 LLM 适配器。它在 `ctx.llm` 上注册 provider 路由 `codex`(显示名「OpenAI 订阅」),用你的 Codex 订阅账户的 token 调用 GPT 模型。由根 `cordis.patch.yml` 以子路径 `kino-dsh-plugins/codex` 挂载。
 
 ## 工作原理
 
@@ -14,7 +14,10 @@
 
 安装插件后**必须完成一次本插件的登录授权**(无论本机是否用过 codex CLI,插件都不会读取它的凭据)。两种方式,任选其一:
 
-1. **网页设置面板(推荐)**:打开 DeepSeek Harness 的设置面板,进入 **Codex** 分区,点「使用 ChatGPT 账号登录」。页面会显示登录链接和一次性码(可一键复制);在浏览器里打开链接、输入一次性码后,页面会自动完成登录。全程在设备码流程内,凭据只落在本机,页面上永远看不到 token。
+1. **网页设置面板(推荐,集成在「模型」设置域,无独立侧边栏分区)**:
+   - 新会话/空会话时,打开设置会自动弹出「登录 OpenAI 订阅」引导框(与官方 DeepSeek 凭证引导同一层);
+   - 任何时刻,设置面板右上角都有「登录 OpenAI 订阅」按钮;
+   - 登录框会显示链接和一次性码(可一键复制);在浏览器里打开链接、输入一次性码后,页面自动完成登录。全程在设备码流程内,凭据只落在本机,页面上永远看不到 token。
 2. **运行随包登录脚本**(无头 profile 或偏好终端的用户):
 
    ```sh
@@ -27,7 +30,7 @@
 
 ## 使用
 
-登录完成后,在 DeepSeek Harness 的模型选择器里把提供商切到 Codex,再选一个模型即可。在线时显示你的账户可用模型;拉取失败时回退到静态备用模型(gpt-5.6-sol、gpt-5.6-terra、gpt-5.5、gpt-5.4、gpt-5.3-codex-spark)。
+登录完成后,在 DeepSeek Harness 的模型选择器里把提供商切到「OpenAI 订阅」,再选一个模型即可。在线时显示你的账户可用模型;拉取失败时回退到静态备用模型(gpt-5.6-sol、gpt-5.6-terra、gpt-5.5、gpt-5.4、gpt-5.3-codex-spark)。
 
 ## 可选设置
 

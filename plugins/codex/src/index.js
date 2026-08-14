@@ -658,7 +658,7 @@ var CodexAdapter = class extends LlmAdapter {
 	providerInfo(provider) {
 		return {
 			id: provider,
-			name: "Codex"
+			name: "OpenAI 订阅"
 		};
 	}
 	providerRetryPolicy(_provider) {
@@ -1005,7 +1005,7 @@ function apply(ctx, config) {
 	});
 	ctx.llm.registerConfigurableProviders([{
 		provider: PROVIDER,
-		displayName: "Codex",
+		displayName: "OpenAI 订阅",
 		settingsNs: NS,
 		settingsPath: []
 	}]);
