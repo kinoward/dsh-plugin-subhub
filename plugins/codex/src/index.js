@@ -648,47 +648,56 @@ const REASONING_EFFORTS = [
 	}
 ];
 /**
- * Static fallback catalog used when the endpoint cannot be reached.
- * Context-window figures per model family follow the numbers the opencode
- * project's codex plugin uses for ChatGPT subscriptions (gpt-5.6 family:
- * 500k context / 372k input / 128k output; gpt-5.5 and below: 400k / 272k /
- * 128k); the live /models catalog takes precedence when reachable.
+ * Context-window table by model family. The /models endpoint does not
+ * disclose context capacities, so this local table only fills that one
+ * metadata gap; the figures follow the opencode project's codex plugin
+ * (gpt-5.6 family: 500k context / 372k input / 128k output; earlier
+ * families: 400k / 272k / 128k). Unknown ids fall back to the configured
+ * defaultContextWindow.
+ */
+const FAMILY_CONTEXT_WINDOWS = [
+	{
+		pattern: /^gpt-5\.6/,
+		window: 500000
+	}
+];
+function contextWindowFor(id) {
+	for (const family of FAMILY_CONTEXT_WINDOWS) if (family.pattern.test(id)) return family.window;
+	return void 0;
+}
+/**
+ * Offline fallback catalog, shown only while the /models endpoint is
+ * unreachable. It never merges into the live list: online, the picker shows
+ * exactly what the account's catalog returns.
  */
 const DEFAULT_MODELS = [
 	{
 		id: "gpt-5.6-sol",
-		name: "GPT-5.6-Sol",
-		contextWindow: 500000
+		name: "GPT-5.6-Sol"
 	},
 	{
 		id: "gpt-5.6-terra",
-		name: "GPT-5.6-Terra",
-		contextWindow: 500000
+		name: "GPT-5.6-Terra"
 	},
 	{
 		id: "gpt-5.6-luna",
-		name: "GPT-5.6-Luna",
-		contextWindow: 500000
+		name: "GPT-5.6-Luna"
 	},
 	{
 		id: "gpt-5.5",
-		name: "GPT-5.5",
-		contextWindow: 400000
+		name: "GPT-5.5"
 	},
 	{
 		id: "gpt-5.4",
-		name: "GPT-5.4",
-		contextWindow: 400000
+		name: "GPT-5.4"
 	},
 	{
 		id: "gpt-5.4-mini",
-		name: "GPT-5.4-Mini",
-		contextWindow: 400000
+		name: "GPT-5.4-Mini"
 	},
 	{
 		id: "gpt-5.3-codex-spark",
-		name: "GPT-5.3-Codex-Spark",
-		contextWindow: 400000
+		name: "GPT-5.3-Codex-Spark"
 	}
 ];
 /** Pick the endpoint for one credential mode. */
@@ -727,22 +736,16 @@ var CodexAdapter = class extends LlmAdapter {
 	}
 	listModels(provider) {
 		const config = this.config.options();
-		return this.config.tokenStore.listModels(config).then((remote) => {
-			const merged = [...(remote ?? [])];
-			const seen = new Set(merged.map((model) => model.id));
-			for (const model of config.models) if (!seen.has(model.id)) merged.push(modelInfo(provider, model));
-			return merged;
-		}).catch((error) => {
+		return this.config.tokenStore.listModels(config).catch((error) => {
 			if (error?.code !== "MISSING_CREDENTIAL") {
-				this.config.logger?.warn("codex: model catalog unavailable, using configured models");
+				this.config.logger?.warn("codex: model catalog unavailable, using offline fallback models");
 				this.config.logger?.warn(error);
 			}
-			return config.models.map((model) => modelInfo(provider, model));
-		});
+			return void 0;
+		}).then((remote) => (remote !== void 0 && remote.length > 0 ? remote : DEFAULT_MODELS.map((model) => modelInfo(provider, model))));
 	}
 	resolveModel(provider, model) {
 		const config = this.config.options();
-		const configured = config.models.find((entry) => entry.id === model);
 		return this.config.tokenStore.catalogEntry(config, model).then((live) => {
 			// Reasoning levels come from the model's own catalog entry; the
 			// static three-step list is only an offline fallback.
@@ -750,14 +753,14 @@ var CodexAdapter = class extends LlmAdapter {
 			const configuredDefault = config.defaultReasoningEffort !== void 0 && efforts.some((effort) => effort.id === config.defaultReasoningEffort) ? ReasoningEffortId(config.defaultReasoningEffort) : void 0;
 			const defaultEffort = configuredDefault ?? (live?.reasoning?.defaultEffort !== void 0 && efforts.some((effort) => effort.id === live.reasoning.defaultEffort) ? live.reasoning.defaultEffort : void 0);
 			return {
-				...configured === void 0 ? {
+				...live === void 0 ? {
 					provider,
 					id: model,
 					name: model,
 					inputModalities: ["text"]
-				} : modelInfo(provider, configured),
+				} : modelInfo(provider, live),
 				context: {
-					contextWindow: configured?.contextWindow ?? config.defaultContextWindow
+					contextWindow: contextWindowFor(model) ?? config.defaultContextWindow
 				},
 				reasoning: {
 					efforts,
@@ -1005,40 +1008,16 @@ function createLoginController(tokenStore, logger, onAuthChanged) {
 const name = "codex";
 const inject = ["llm"];
 const NS = settingsNamespace("codex");
-const catalogModel = z.object({
-	id: z.string().required(),
-	name: z.string(),
-	description: z.string(),
-	contextWindow: z.number().step(1).min(1)
-});
 const Config = z.object({
 	authFile: z.string(),
 	baseURL: z.string(),
 	apiBaseURL: z.string(),
 	defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
 	modelsCacheTtlMs: z.number().min(1).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_MODELS_CACHE_TTL_MS),
-	models: z.array(catalogModel).default(DEFAULT_MODELS),
 	defaultReasoningEffort: z.union(["low", "medium", "high", "xhigh", "max", "ultra"]),
 	streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
 	retryPolicy: RetryPolicySchema
 });
-/** Validate the configured catalog entries. */
-function resolveModels(models) {
-	const seen = /* @__PURE__ */ new Set();
-	return (models ?? DEFAULT_MODELS).map((model) => {
-		if (model.id.length === 0) throw new Error("codex: catalog model ids must be non-empty");
-		if (model.name !== void 0 && model.name.length === 0) throw new Error(`codex: catalog model "${model.id}" has an empty name`);
-		if (model.contextWindow !== void 0 && (!Number.isInteger(model.contextWindow) || model.contextWindow <= 0)) throw new Error(`codex: catalog model "${model.id}" contextWindow must be a positive integer`);
-		if (seen.has(model.id)) throw new Error(`codex: duplicate catalog model "${model.id}"`);
-		seen.add(model.id);
-		return {
-			id: model.id,
-			...model.name === void 0 ? {} : { name: model.name },
-			...model.description === void 0 ? {} : { description: model.description },
-			...model.contextWindow === void 0 ? {} : { contextWindow: model.contextWindow }
-		};
-	});
-}
 /**
  * The one explicit resolve step from raw config to validated connection
  * facts. Programmatic construction may bypass Schemastery normalization, so
@@ -1059,7 +1038,6 @@ function resolveAdapterOptions(config) {
 		apiBaseURL: config.apiBaseURL,
 		defaultContextWindow: config.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
 		modelsCacheTtlMs,
-		models: resolveModels(config.models),
 		defaultReasoningEffort: config.defaultReasoningEffort,
 		streamIdleTimeoutMs,
 		retryPolicy: resolveRetryPolicy(config.retryPolicy, "codex: retryPolicy")

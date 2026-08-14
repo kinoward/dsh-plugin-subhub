@@ -64,7 +64,7 @@ node plugins/codex/login.js
 
 - 登录后启动 harness,在模型选择器里应能看到「OpenAI 订阅」提供商及其模型;退出登录后应消失;
 - 登录 API 可用 curl 检查:`GET /api/kino-codex/login/status` 应返回 `{ok:true,loggedIn:...}`,`POST /login/logout` 删除凭据并注销路由;
-- 若模型列表接口不可用,会回退到静态备用模型(gpt-5.6-sol、gpt-5.6-terra、gpt-5.6-luna、gpt-5.5、gpt-5.4、gpt-5.4-mini、gpt-5.3-codex-spark);
+- 模型列表完全动态(在线仅显示账户 /models 接口返回的模型,离线才用内置备用列表);
 - 鉴权文件权限应为 0600、不要提交进 git;token 不会打印到日志或终端,也不会经过登录 API 回传浏览器。
 
 ## 新增插件
