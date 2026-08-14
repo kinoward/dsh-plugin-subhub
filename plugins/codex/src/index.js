@@ -590,7 +590,7 @@ class CodexTokenStore {
 			const efforts = levels.map((level) => typeof level === "string" ? { effort: level } : level).filter((level) => typeof level?.effort === "string" && WIRE_EFFORT_VALUES.has(level.effort)).map((level) => ({
 				id: ReasoningEffortId(level.effort),
 				name: EFFORT_DISPLAY_NAMES[level.effort] ?? level.effort,
-				...typeof level.description === "string" && level.description !== "" ? { description: level.description } : {}
+				...typeof level.description === "string" && level.description !== "" ? { description: level.effort === "ultra" ? `${level.description}(请求按官方 codex CLI 做法映射为 max 推理)` : level.description } : {}
 			}));
 			const defaultLevel = entry.default_reasoning_level;
 			const contextWindow = Number.isInteger(entry.context_window) && entry.context_window > 0 ? entry.context_window : void 0;
