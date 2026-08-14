@@ -1,7 +1,7 @@
-// Client half of the kino-codex plugin: the "第三方订阅" settings section —
+// Client half of the kino-subhub plugin: the "第三方订阅" settings section —
 // one hub page where every third-party subscription provider lives. Each
 // provider card shares the same login-modal surface; today OpenAI (ChatGPT /
-// Codex subscription) is wired end to end, and further providers plug in by
+// OpenAI subscription) is wired end to end, and further providers plug in by
 // adding a card entry plus their own host-side auth endpoints. Only after a
 // successful login does the host register the provider route, which is what
 // makes it appear in the Models page and the model picker. The same plugin
@@ -12,7 +12,7 @@
 // through the locale service. Hand-written client bundle in the shell's
 // module-loader format (no build step).
 window.__ModuleLoader__.load({
-	id: "kino-dsh-plugins/codex",
+	id: "kino-dsh-plugins/subhub",
 	factory: (require) => {
 		const React = require("react");
 		const {
@@ -28,7 +28,7 @@ window.__ModuleLoader__.load({
 			writeClipboard
 		} = require("@deepseek-ai/dsh-client-ui-primitives");
 		const inject = ["slots", "locale"];
-		const API = "/api/kino-codex";
+		const API = "/api/kino-subhub";
 		const POLL_MS = 2500;
 		const NS = "settings.subscriptions";
 		const h = React.createElement;
@@ -47,12 +47,12 @@ window.__ModuleLoader__.load({
 			loggingOut: "退出中…",
 			credentialFile: "凭据文件",
 			openaiName: "OpenAI 订阅",
-			openaiDesc: "GPT 系列模型,使用 ChatGPT / Codex 订阅账户登录。",
+			openaiDesc: "GPT 系列模型,使用 ChatGPT 订阅账户登录。",
 			moreComing: "其他服务即将接入,敬请期待。",
 			modalTitle: "登录 {name}",
 			modalDesc: "在浏览器中完成一次性设备授权,登录成功后此页面自动同步。",
 			close: "关闭",
-			privacyNote: "登录凭据仅保存在本插件自己的文件中,不会读取 codex CLI 等其它程序的登录信息。",
+			privacyNote: "登录凭据仅保存在本插件自己的文件中,不会读取其它程序的登录信息。",
 			requesting: "正在申请一次性登录码…",
 			step1: "打开下面的登录链接",
 			step2: "输入一次性码",
@@ -94,12 +94,12 @@ window.__ModuleLoader__.load({
 			loggingOut: "Signing out…",
 			credentialFile: "Credential file",
 			openaiName: "OpenAI subscription",
-			openaiDesc: "GPT models, signed in with a ChatGPT / Codex subscription account.",
+			openaiDesc: "GPT models, signed in with a ChatGPT / OpenAI subscription account.",
 			moreComing: "More providers are on the way. Stay tuned.",
 			modalTitle: "Sign in to {name}",
 			modalDesc: "Complete a one-time device authorization in the browser; this page syncs automatically after sign-in.",
 			close: "Close",
-			privacyNote: "Credentials are stored only in this plugin's own file; sign-in never reads other apps such as the codex CLI.",
+			privacyNote: "Credentials are stored only in this plugin's own file; sign-in never reads other apps' sign-in data.",
 			requesting: "Requesting a one-time code…",
 			step1: "Open the sign-in link below",
 			step2: "Enter the one-time code",
@@ -762,7 +762,7 @@ window.__ModuleLoader__.load({
 			}, [subscribeLocale, refresh]);
 			const providers = [
 				{
-					id: "codex",
+					id: "openai",
 					nameKey: "openaiName",
 					descKey: "openaiDesc",
 					logo: h(OpenAILogo, { size: 16 })
@@ -795,10 +795,10 @@ window.__ModuleLoader__.load({
 			]);
 		}
 		function apply(ctx) {
-			ctx.effect(() => ctx.locale.register(NS, { zh, en }), "kino-codex: subscription dictionaries");
+			ctx.effect(() => ctx.locale.register(NS, { zh, en }), "kino-subhub: subscription dictionaries");
 			const t = ctx.locale.bind(NS);
 			const subscribeLocale = (listener) => ctx.locale.subscribe(listener);
-			ctx.effect(() => installModelCatalogAugmentation(ctx, t), "kino-codex: models page augmentation");
+			ctx.effect(() => installModelCatalogAugmentation(ctx, t), "kino-subhub: models page augmentation");
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
 				name: "settings.section",
 				id: "third-party-subscriptions",

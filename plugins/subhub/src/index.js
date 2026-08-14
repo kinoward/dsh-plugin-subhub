@@ -1,14 +1,14 @@
-// kino-codex: use a Codex subscription account (ChatGPT OAuth) as an LLM
+// kino-subhub: use an OpenAI subscription account (ChatGPT OAuth) as an LLM
 // provider in the DeepSeek Harness.
 //
 // The adapter follows the same shape as the official llm-deepseek adapter:
-// it registers the `codex` provider route on ctx.llm, resolves credentials
+// it registers the `openai` provider route on ctx.llm, resolves credentials
 // per request, and translates the Responses-API SSE stream into harness
 // StreamChunks. Authentication is OAuth-token based: tokens are read from the
-// plugin's own credential file (`~/.kino-dsh/codex-auth.json` by default,
+// plugin's own credential file (`~/.kino-dsh/openai-auth.json` by default,
 // written by the bundled login flow) and refreshed through auth.openai.com
-// before they expire. Credentials of other programs (e.g. the codex CLI's
-// auth file) are never read.
+// before they expire. Credentials of other programs (e.g. the official Codex
+// CLI's auth file) are never read.
 import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -19,7 +19,7 @@ import { MAX_TIMER_DELAY_MS, idleWatchdog, timeoutOf } from "@deepseek-ai/dsh-ti
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import { authFilePayload, exchangeAuthorizationCode, pollAuthorizationOnce, requestUserCode } from "./device-flow.js";
 /**
- * Reasoning-effort vocabulary the Codex backend advertises per model through
+ * Reasoning-effort vocabulary the OpenAI backend advertises per model through
  * `supported_reasoning_levels`. The adapter does NOT hardcode the selection:
  * the picker shows exactly what the model's catalog entry offers, and the
  * wire value is the effort id itself. Fallback names are display-only.
@@ -38,14 +38,14 @@ const EFFORT_DISPLAY_NAMES = {
 function flattenText(blocks) {
 	return blocks.filter((block) => block.type === "text").map((block) => block.text).join("");
 }
-/** Reject image blocks that have no wire representation on the Codex backend. */
+/** Reject image blocks that have no wire representation on the OpenAI backend. */
 function assertSerializableImages(message) {
 	if (message.role === "assistant") {
 		const images = message.content.filter((block) => block.type === "image");
-		if (images.length > 0) throw new LlmError("The Codex backend cannot accept image content in assistant turns.", "UNSUPPORTED_CONTENT");
+		if (images.length > 0) throw new LlmError("The OpenAI backend cannot accept image content in assistant turns.", "UNSUPPORTED_CONTENT");
 	}
 	for (const block of message.content) {
-		if (block.type === "tool-result" && contentHasImage(block.content)) throw new LlmError("The Codex backend cannot accept image content inside tool results (function_call_output only supports text).", "UNSUPPORTED_CONTENT");
+		if (block.type === "tool-result" && contentHasImage(block.content)) throw new LlmError("The OpenAI backend cannot accept image content inside tool results (function_call_output only supports text).", "UNSUPPORTED_CONTENT");
 	}
 }
 /** Encode one stored attachment as a data URL for the wire. */
@@ -55,7 +55,7 @@ function imageDataUrl(ref, data) {
 /**
  * Resolve user-content blocks into Responses API content parts. Text becomes
  * `input_text`; image attachments are read through the harness attachment
- * store and become `input_image` parts with an inline data URL (the Codex
+ * store and become `input_image` parts with an inline data URL (the OpenAI
  * backend accepts a string URL there, not the chat-completions object form).
  */
 async function imageContentParts(blocks, attachments, signal) {
@@ -73,13 +73,13 @@ async function imageContentParts(blocks, attachments, signal) {
 /** Validate the adapter-owned reasoning effort before putting it on the wire. */
 function reasoningEffort(effort) {
 	if (WIRE_EFFORT_VALUES.has(effort)) return effort;
-	throw new LlmError(`Codex models do not support reasoning effort "${effort}"`, "UNSUPPORTED_REASONING_EFFORT");
+	throw new LlmError(`OpenAI models do not support reasoning effort "${effort}"`, "UNSUPPORTED_REASONING_EFFORT");
 }
 /**
  * Map a harness-facing effort id to the Responses API wire value. The model
  * catalog advertises "ultra" as a capability level, but the wire endpoint
  * rejects it (valid: none/minimal/low/medium/high/xhigh/max) — the official
- * codex CLI maps Ultra to Max on the wire, and this adapter does the same.
+ * official Codex CLI maps Ultra to Max on the wire, and this adapter does the same.
  */
 function wireReasoningEffort(effort) {
 	const valid = reasoningEffort(effort);
@@ -88,12 +88,12 @@ function wireReasoningEffort(effort) {
 /**
  * Serialize the conversation into Responses API input items. Assistant text
  * becomes a message item and every assistant tool call becomes its own flat
- * `function_call` item (the Codex backend rejects the public API's embedded
+ * `function_call` item (the OpenAI backend rejects the public API's embedded
  * `tool_calls` array); every tool result becomes a `function_call_output`
  * item correlated by `call_id`. User images become `input_image` content
  * parts whose bytes are read from the harness attachment store. The harness
  * `system` field is handled by the caller through `instructions`. Reasoning
- * blocks from history are dropped: Codex reasoning is model-internal and
+ * blocks from history are dropped: OpenAI reasoning is model-internal and
  * cannot be replayed. Assistant turns that produced neither text nor tool
  * calls contribute no item.
  * @param messages - the harness conversation, in order.
@@ -136,7 +136,7 @@ async function serializeInput(messages, attachments, signal) {
 	return items;
 }
 /**
- * Build the full Responses API request. Always streaming. The Codex backend
+ * Build the full Responses API request. Always streaming. The OpenAI backend
  * accepts neither stop sequences nor an output token cap (the official CLI
  * sends neither), so `options.stop` and `options.maxTokens` are deliberately
  * ignored; runaway output is bounded by the harness's own timeout policies.
@@ -155,7 +155,7 @@ async function serializeRequest(options, attachments, signal) {
 	return {
 		model: options.model,
 		stream: true,
-		// The Codex backend rejects requests without an explicit store value.
+		// The OpenAI backend rejects requests without an explicit store value.
 		store: false,
 		...options.system !== void 0 ? { instructions: options.system } : {},
 		input: await serializeInput(options.messages, attachments, signal),
@@ -390,10 +390,10 @@ async function* translate(payloads) {
 	};
 }
 //#endregion
-//#region auth: Codex OAuth token store
-/** OAuth application id shared by the official codex CLI (login + refresh). */
+//#region auth: OpenAI OAuth token store
+/** OAuth application id shared by the official Codex CLI (login + refresh). */
 const OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
-/** Token endpoint the official codex CLI refreshes ChatGPT tokens through. */
+/** Token endpoint the official Codex CLI refreshes ChatGPT tokens through. */
 const REFRESH_TOKEN_URL = "https://auth.openai.com/oauth/token";
 /** Refresh proactively this far before the access token's JWT expiry. */
 const ACCESS_TOKEN_REFRESH_WINDOW_MS = 5 * 60 * 1000;
@@ -439,15 +439,15 @@ function providerRetryAfterMs(value) {
 	return Number.isFinite(delay) && delay > 0 ? delay : void 0;
 }
 /**
- * Owns one Codex credential source: an auth.json in the official codex CLI
- * shape (`auth_mode`, `OPENAI_API_KEY`, `tokens.{access_token, refresh_token,
+ * Owns one OpenAI credential source: an auth.json in the official Codex
+ * CLI's shape (`auth_mode`, `OPENAI_API_KEY`, `tokens.{access_token, refresh_token,
  * id_token, account_id}`). Reads are cheap and cache-free; the only memory is
  * the single-flight refresh promise. When the access token nears expiry the
  * store re-reads the file (another process may already have refreshed it),
  * refreshes through auth.openai.com under a lock file, and persists the
  * rotated tokens back with mode 0600.
  */
-class CodexTokenStore {
+class OpenAITokenStore {
 	constructor(options, logger) {
 		this.options = options;
 		this.logger = logger;
@@ -458,7 +458,7 @@ class CodexTokenStore {
 	}
 	/**
 	 * The one credential file this plugin owns. It never reads another
-	 * program's auth files (the codex CLI's `~/.codex/auth.json` included)
+	 * program's auth files (the Codex CLI's `~/.codex/auth.json` included)
 	 * unless the user points `authFile` at one explicitly — installing this
 	 * plugin must not silently reuse credentials the user granted to other
 	 * software.
@@ -466,7 +466,7 @@ class CodexTokenStore {
 	authFilePath() {
 		const config = this.options();
 		if (config.authFile !== void 0 && config.authFile.trim() !== "") return config.authFile.trim();
-		return join(homedir(), ".kino-dsh", "codex-auth.json");
+		return join(homedir(), ".kino-dsh", "openai-auth.json");
 	}
 	/** New logins land in the same plugin-owned file. */
 	writeFilePath() {
@@ -498,7 +498,7 @@ class CodexTokenStore {
 	async getToken() {
 		const path = this.authFilePath();
 		const file = this.readFile(path);
-		if (file === void 0) throw new LlmError(`codex: no authentication found at ${path}; sign in with "codex login" or run the bundled login script (plugins/codex/login.js)`, "MISSING_CREDENTIAL");
+		if (file === void 0) throw new LlmError(`openai: no authentication found at ${path}; sign in from the "Third-party subscriptions" settings page or run the bundled login script (plugins/subhub/login.js)`, "MISSING_CREDENTIAL");
 		const apiKey = file.OPENAI_API_KEY;
 		if (typeof apiKey === "string" && apiKey.length > 0) return {
 			token: apiKey,
@@ -506,7 +506,7 @@ class CodexTokenStore {
 			accountId: void 0
 		};
 		const tokens = file.tokens;
-		if (tokens === void 0 || typeof tokens.access_token !== "string" || tokens.access_token.length === 0) throw new LlmError(`codex: ${path} has no usable tokens; sign in with "codex login" or run the bundled login script`, "MISSING_CREDENTIAL");
+		if (tokens === void 0 || typeof tokens.access_token !== "string" || tokens.access_token.length === 0) throw new LlmError(`openai: ${path} has no usable tokens; sign in from the "Third-party subscriptions" settings page or run the bundled login script`, "MISSING_CREDENTIAL");
 		const exp = decodeJwtExp(tokens.access_token);
 		if (exp === void 0 || exp - Date.now() > ACCESS_TOKEN_REFRESH_WINDOW_MS) return {
 			token: tokens.access_token,
@@ -543,10 +543,10 @@ class CodexTokenStore {
 		try {
 			const file = this.readFile(path);
 			const tokens = file?.tokens;
-			if (tokens === void 0) throw new LlmError(`codex: ${path} has no tokens; sign in again`, "MISSING_CREDENTIAL");
+			if (tokens === void 0) throw new LlmError(`openai: ${path} has no tokens; sign in again`, "MISSING_CREDENTIAL");
 			const exp = decodeJwtExp(tokens.access_token);
 			if (exp !== void 0 && exp - Date.now() > ACCESS_TOKEN_REFRESH_WINDOW_MS) return tokens;
-			if (typeof tokens.refresh_token !== "string" || tokens.refresh_token.length === 0) throw new LlmError(`codex: ${path} has no refresh token; sign in again`, "INVALID_CREDENTIAL");
+			if (typeof tokens.refresh_token !== "string" || tokens.refresh_token.length === 0) throw new LlmError(`openai: ${path} has no refresh token; sign in again`, "INVALID_CREDENTIAL");
 			const response = await fetch(REFRESH_TOKEN_URL, {
 				method: "POST",
 				headers: {
@@ -561,13 +561,13 @@ class CodexTokenStore {
 			});
 			if (!response.ok) {
 				const body = await response.text().catch(() => "");
-				throw new LlmError(`codex: token refresh failed (HTTP ${response.status}); sign in again with "codex login"`, "INVALID_CREDENTIAL", {
+				throw new LlmError(`openai: token refresh failed (HTTP ${response.status}); sign in again from the "Third-party subscriptions" settings page`, "INVALID_CREDENTIAL", {
 					status: response.status,
 					cause: new Error(body.slice(0, 300))
 				});
 			}
 			const next = await response.json();
-			if (typeof next.access_token !== "string" || next.access_token.length === 0) throw new LlmError("codex: token refresh returned no access token", "INVALID_CREDENTIAL");
+			if (typeof next.access_token !== "string" || next.access_token.length === 0) throw new LlmError("openai: token refresh returned no access token", "INVALID_CREDENTIAL");
 			const merged = {
 				...tokens,
 				access_token: next.access_token,
@@ -596,7 +596,7 @@ class CodexTokenStore {
 			mkdirSync(dirname(path), { recursive: true });
 			writeFileSync(path, JSON.stringify(data, void 0, 2) + "\n", { mode: 384 });
 		} catch (error) {
-			this.logger?.warn(`codex: could not persist refreshed tokens to ${path}: ${error?.message ?? error}`);
+			this.logger?.warn(`openai: could not persist refreshed tokens to ${path}: ${error?.message ?? error}`);
 		}
 	}
 	/**
@@ -616,7 +616,7 @@ class CodexTokenStore {
 		});
 		if (!response.ok) {
 			this.catalogFailureAt = now;
-			throw new LlmError(`codex: model catalog request failed (HTTP ${response.status})`, httpErrorCode(response.status, void 0), { status: response.status });
+			throw new LlmError(`openai: model catalog request failed (HTTP ${response.status})`, httpErrorCode(response.status, void 0), { status: response.status });
 		}
 		const body = await response.json();
 		const raw = Array.isArray(body?.models) ? body.models : Array.isArray(body?.data) ? body.data : [];
@@ -625,7 +625,7 @@ class CodexTokenStore {
 			const efforts = levels.map((level) => typeof level === "string" ? { effort: level } : level).filter((level) => typeof level?.effort === "string" && WIRE_EFFORT_VALUES.has(level.effort)).map((level) => ({
 				id: ReasoningEffortId(level.effort),
 				name: EFFORT_DISPLAY_NAMES[level.effort] ?? level.effort,
-				...typeof level.description === "string" && level.description !== "" ? { description: level.effort === "ultra" ? `${level.description}(请求按官方 codex CLI 做法映射为 max 推理,并注入主动委派指令)` : level.description } : {}
+				...typeof level.description === "string" && level.description !== "" ? { description: level.effort === "ultra" ? `${level.description}(按 max 推理执行,并注入主动委派指令)` : level.description } : {}
 			}));
 			const defaultLevel = entry.default_reasoning_level;
 			const contextWindow = Number.isInteger(entry.context_window) && entry.context_window > 0 ? entry.context_window : void 0;
@@ -668,12 +668,12 @@ const DEFAULT_CONTEXT_WINDOW = 4e5;
 const DEFAULT_MODELS_CACHE_TTL_MS = 3e5;
 /** Default maximum idle interval while an adapter stream read is outstanding. */
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 3e5;
-/** Codex backend the official codex CLI talks to with ChatGPT OAuth tokens. */
-const CHATGPT_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex";
+/** OpenAI backend the official Codex CLI talks to with ChatGPT OAuth tokens. */
+const CHATGPT_BACKEND_BASE_URL = "https://chatgpt.com/backend-api/codex";
 /** Public Responses API used when the credential is an API key. */
 const OPENAI_API_BASE_URL = "https://api.openai.com/v1";
 /** Provider route this plugin owns. */
-const PROVIDER = "codex";
+const PROVIDER = "openai";
 const LOW_REASONING_EFFORT = ReasoningEffortId("low");
 const MEDIUM_REASONING_EFFORT = ReasoningEffortId("medium");
 const HIGH_REASONING_EFFORT = ReasoningEffortId("high");
@@ -752,7 +752,7 @@ const DEFAULT_MODELS = [
 /** Pick the endpoint for one credential mode. */
 function effectiveBaseURL(config, mode) {
 	if (mode === "apikey") return config.apiBaseURL ?? OPENAI_API_BASE_URL;
-	return config.baseURL ?? CHATGPT_CODEX_BASE_URL;
+	return config.baseURL ?? CHATGPT_BACKEND_BASE_URL;
 }
 function modelInfo(provider, model) {
 	return {
@@ -794,12 +794,12 @@ function applyUltraDelegationDirective(options) {
 	return system === options.system ? options : { ...options, system };
 }
 /**
- * `CodexAdapter`: fetch + SSE against the Codex backend's Responses API,
+ * `OpenAIAdapter`: fetch + SSE against the OpenAI backend's Responses API,
  * emitting harness StreamChunks. Connection facts and the bearer token are
  * resolved once per operation, so auth rotation reaches the very next
  * request without restarting anything.
  */
-var CodexAdapter = class extends LlmAdapter {
+var OpenAIAdapter = class extends LlmAdapter {
 	constructor(config) {
 		super();
 		this.config = config;
@@ -817,7 +817,7 @@ var CodexAdapter = class extends LlmAdapter {
 		const config = this.config.options();
 		return this.config.tokenStore.listModels(config).catch((error) => {
 			if (error?.code !== "MISSING_CREDENTIAL") {
-				this.config.logger?.warn("codex: model catalog unavailable, using offline fallback models");
+				this.config.logger?.warn("openai: model catalog unavailable, using offline fallback models");
 				this.config.logger?.warn(error);
 			}
 			return void 0;
@@ -866,12 +866,12 @@ var CodexAdapter = class extends LlmAdapter {
 				yield result.value;
 			}
 		} catch (error) {
-			if (timeoutOf(watchdog.signal, "LLM_STREAM_IDLE_TIMEOUT") !== void 0) throw new LlmError(`Codex stream idle timeout after ${connection.streamIdleTimeoutMs}ms`, "TIMEOUT", { cause: error });
-			if (options.signal?.aborted) throw new LlmError("Codex request aborted by caller", "ABORTED", { cause: error });
+			if (timeoutOf(watchdog.signal, "LLM_STREAM_IDLE_TIMEOUT") !== void 0) throw new LlmError(`OpenAI stream idle timeout after ${connection.streamIdleTimeoutMs}ms`, "TIMEOUT", { cause: error });
+			if (options.signal?.aborted) throw new LlmError("OpenAI request aborted by caller", "ABORTED", { cause: error });
 			if (error instanceof LlmError) throw error;
-			throw new LlmError(`Codex API stream from ${baseURL} failed`, "TRANSPORT", { cause: error });
+			throw new LlmError(`OpenAI API stream from ${baseURL} failed`, "TRANSPORT", { cause: error });
 		} finally {
-			consumer.abort("Codex stream consumer stopped");
+			consumer.abort("OpenAI stream consumer stopped");
 			if (!exhausted && iterator.return !== void 0) try {
 				await iterator.return();
 			} catch (_abortedTransportTeardown) {}
@@ -895,10 +895,10 @@ var CodexAdapter = class extends LlmAdapter {
 			});
 		} catch (error) {
 			if (signal.aborted) throw error;
-			throw new LlmError(`Codex API request to ${baseURL} failed`, "TRANSPORT", { cause: error });
+			throw new LlmError(`OpenAI API request to ${baseURL} failed`, "TRANSPORT", { cause: error });
 		}
 		if (!response.ok) {
-			let message = `Codex API error (HTTP ${response.status})`;
+			let message = `OpenAI API error (HTTP ${response.status})`;
 			let providerError;
 			try {
 				const body = await response.json();
@@ -913,14 +913,14 @@ var CodexAdapter = class extends LlmAdapter {
 				...id === null || id === "" ? {} : { requestId: ProviderRequestId(id) }
 			});
 		}
-		if (!response.body) throw new LlmError("Codex API returned no response body", "EMPTY_RESPONSE");
+		if (!response.body) throw new LlmError("OpenAI API returned no response body", "EMPTY_RESPONSE");
 		yield* translate(parseSse(response.body, onComment));
 	}
 };
 //#endregion
 //#region login api: browser-side device login through the web server
 /** API prefix the client settings page talks to (same-origin fetch). */
-const LOGIN_API_PATH = "/api/kino-codex";
+const LOGIN_API_PATH = "/api/kino-subhub";
 /** Browser-trust fence: same-origin requests only (DNS-rebinding + CSRF guard). */
 function isTrustedRequest(req) {
 	const host = req.headers.host ?? "";
@@ -985,7 +985,7 @@ function createLoginController(tokenStore, logger, onAuthChanged, listCatalog) {
 		try {
 			onAuthChanged?.();
 		} catch (error) {
-			logger?.warn(`codex: onAuthChanged failed: ${error?.message ?? error}`);
+			logger?.warn(`openai: onAuthChanged failed: ${error?.message ?? error}`);
 		}
 	};
 	return {
@@ -1081,7 +1081,7 @@ function createLoginController(tokenStore, logger, onAuthChanged, listCatalog) {
 					message: "not found"
 				});
 			} catch (error) {
-				logger?.warn(`codex: login api failed: ${error?.message ?? error}`);
+				logger?.warn(`openai: login api failed: ${error?.message ?? error}`);
 				sendJson(res, 500, {
 					ok: false,
 					code: "error",
@@ -1093,9 +1093,9 @@ function createLoginController(tokenStore, logger, onAuthChanged, listCatalog) {
 }
 //#endregion
 //#region plugin: register the provider route
-const name = "codex";
+const name = "subhub";
 const inject = ["llm"];
-const NS = settingsNamespace("codex");
+const NS = settingsNamespace("openai");
 const Config = z.object({
 	authFile: z.string(),
 	baseURL: z.string(),
@@ -1114,12 +1114,12 @@ const Config = z.object({
  * @returns validated connection facts.
  */
 function resolveAdapterOptions(config) {
-	if (config.defaultContextWindow !== void 0 && (!Number.isInteger(config.defaultContextWindow) || config.defaultContextWindow <= 0)) throw new Error("codex: defaultContextWindow must be a positive integer");
-	if (config.defaultReasoningEffort !== void 0 && !WIRE_EFFORT_VALUES.has(config.defaultReasoningEffort)) throw new Error(`codex: defaultReasoningEffort must be one of ${[...WIRE_EFFORT_VALUES].join(", ")}`);
+	if (config.defaultContextWindow !== void 0 && (!Number.isInteger(config.defaultContextWindow) || config.defaultContextWindow <= 0)) throw new Error("openai: defaultContextWindow must be a positive integer");
+	if (config.defaultReasoningEffort !== void 0 && !WIRE_EFFORT_VALUES.has(config.defaultReasoningEffort)) throw new Error(`openai: defaultReasoningEffort must be one of ${[...WIRE_EFFORT_VALUES].join(", ")}`);
 	const streamIdleTimeoutMs = config.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS;
-	if (!Number.isFinite(streamIdleTimeoutMs) || streamIdleTimeoutMs <= 0 || streamIdleTimeoutMs > MAX_TIMER_DELAY_MS) throw new Error(`codex: streamIdleTimeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`);
+	if (!Number.isFinite(streamIdleTimeoutMs) || streamIdleTimeoutMs <= 0 || streamIdleTimeoutMs > MAX_TIMER_DELAY_MS) throw new Error(`openai: streamIdleTimeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`);
 	const modelsCacheTtlMs = config.modelsCacheTtlMs ?? DEFAULT_MODELS_CACHE_TTL_MS;
-	if (!Number.isFinite(modelsCacheTtlMs) || modelsCacheTtlMs <= 0) throw new Error("codex: modelsCacheTtlMs must be a positive finite number");
+	if (!Number.isFinite(modelsCacheTtlMs) || modelsCacheTtlMs <= 0) throw new Error("openai: modelsCacheTtlMs must be a positive finite number");
 	return {
 		authFile: config.authFile,
 		baseURL: config.baseURL,
@@ -1128,14 +1128,14 @@ function resolveAdapterOptions(config) {
 		modelsCacheTtlMs,
 		defaultReasoningEffort: config.defaultReasoningEffort,
 		streamIdleTimeoutMs,
-		retryPolicy: resolveRetryPolicy(config.retryPolicy, "codex: retryPolicy")
+		retryPolicy: resolveRetryPolicy(config.retryPolicy, "openai: retryPolicy")
 	};
 }
 /**
- * Register the `codex` provider route on `ctx.llm`. Connection facts resolve
- * per request from the optional `codex:` settings section (hot-reloaded, what
+ * Register the `openai` provider route on `ctx.llm`. Connection facts resolve
+ * per request from the optional `openai:` settings section (hot-reloaded, what
  * the web Models page writes) over the composition entry, and the OAuth
- * access token resolves through the CodexTokenStore, so a refreshed login
+ * access token resolves through the OpenAITokenStore, so a refreshed login
  * reaches the very next request without restarting anything.
  */
 function apply(ctx, config) {
@@ -1153,13 +1153,13 @@ function apply(ctx, config) {
 		} catch (error) {
 			if (lastGood === void 0) throw error;
 			lastRaw = raw;
-			ctx.logger.error("codex: keeping the last good configuration after an invalid settings section");
+			ctx.logger.error("openai: keeping the last good configuration after an invalid settings section");
 			ctx.logger.error(error);
 			return lastGood;
 		}
 	};
 	options();
-	const tokenStore = new CodexTokenStore(options, ctx.logger);
+	const tokenStore = new OpenAITokenStore(options, ctx.logger);
 	// The harness loader mounts entries concurrently, so an apply-time
 	// `ctx.get("attachments")` can race the attachment store's mount and
 	// capture undefined forever. Keep the value reactive (ctx.inject
@@ -1181,7 +1181,7 @@ function apply(ctx, config) {
 		return typeof preference === "string" && preference.length > 0 ? preference : void 0;
 	};
 	const providerDisplayName = () => localePreference() === "en" ? "OpenAI subscription" : "OpenAI 订阅";
-	const adapter = new CodexAdapter({
+	const adapter = new OpenAIAdapter({
 		options,
 		tokenStore,
 		resolveAttachments: () => attachments ?? ctx.get("attachments"),
@@ -1265,8 +1265,8 @@ function apply(ctx, config) {
 			kind: "prefix",
 			path: LOGIN_API_PATH,
 			handler: (req, res) => void login.handle(req, res)
-		}), "codex: login api route");
+		}), "openai: login api route");
 	});
 }
 //#endregion
-export { CHATGPT_CODEX_BASE_URL, CodexAdapter, CodexTokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyUltraDelegationDirective, inject, name, resolveAdapterOptions };
+export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyUltraDelegationDirective, inject, name, resolveAdapterOptions };

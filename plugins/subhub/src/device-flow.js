@@ -1,15 +1,15 @@
-// Shared ChatGPT device-code login flow for the kino-codex plugin.
+// Shared ChatGPT device-code login flow for the kino-subhub plugin.
 //
-// Implements the same flow the official codex CLI uses (`codex login`):
+// Implements the same flow the official Codex CLI uses (`codex login`):
 // request a device code from auth.openai.com, show the user the verification
 // URL + one-time code, poll until the user approves in the browser, then
 // exchange the authorization code for OAuth tokens. Used by both the host
-// plugin's login API (`plugins/codex/src/index.js`) and the standalone
-// script (`plugins/codex/login.js`).
+// plugin's login API (`plugins/subhub/src/index.js`) and the standalone
+// script (`plugins/subhub/login.js`).
 const ISSUER = "https://auth.openai.com";
 const DEVICE_VERIFY_URL = `${ISSUER}/codex/device`;
 const REDIRECT_URI = `${ISSUER}/deviceauth/callback`;
-/** Same OAuth app the official codex CLI logs in through (login + refresh). */
+/** Same OAuth app the official Codex CLI logs in through (login + refresh). */
 const OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 /** Device codes live 15 minutes. */
 const DEVICE_CODE_LIFETIME_MS = 15 * 60 * 1000;
@@ -33,7 +33,7 @@ function decodeJwtPayload(token) {
 }
 /**
  * The ChatGPT account id lives in the id_token claims (top-level or inside
- * the openai auth namespace); claim shapes follow the official codex CLI and
+ * the openai auth namespace); claim shapes follow the official Codex CLI and
  * opencode's extraction logic.
  */
 function accountIdFromIdToken(idToken) {
@@ -48,13 +48,13 @@ function accountIdFromIdToken(idToken) {
 }
 /**
  * Ask auth.openai.com for a device code.
- * @param clientId - OAuth client id (defaults to the codex CLI app).
+ * @param clientId - OAuth client id (defaults to the official Codex CLI app).
  * @returns the device-auth session facts; `intervalMs` is the server's
  *   suggested poll cadence, clamped to a sane floor.
  */
 async function requestUserCode(clientId = OAUTH_CLIENT_ID) {
 	const response = await postJson(`${ISSUER}/api/accounts/deviceauth/usercode`, { client_id: clientId });
-	if (response.status === 404) throw new Error("device login is not enabled for this Codex server; run `codex login` instead");
+	if (response.status === 404) throw new Error("device login is not enabled for this ChatGPT subscription; use the official Codex CLI to sign in instead");
 	if (!response.ok) throw new Error(`device code request failed (HTTP ${response.status})`);
 	const userCode = await response.json();
 	if (typeof userCode.device_auth_id !== "string" || typeof userCode.user_code !== "string") throw new Error("unexpected device code response");
@@ -140,8 +140,8 @@ async function completeDeviceLogin(flow) {
 	}
 }
 /**
- * Serialize exchanged tokens into the codex-shaped auth.json payload the
- * token store (and the official codex CLI) reads.
+ * Serialize exchanged tokens into the OpenAI auth.json payload the token
+ * store (and the official Codex CLI) reads.
  */
 function authFilePayload(tokens) {
 	return {

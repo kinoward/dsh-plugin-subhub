@@ -6,9 +6,8 @@
   "main": "index.js",
   "exports": {
     ".": "./index.js",
-    "./hello": "./plugins/hello/src/index.js",
-    "./codex": "./plugins/codex/src/index.js",
-    "./codex/package.json": "./plugins/codex/package.json"
+    "./subhub": "./plugins/subhub/src/index.js",
+    "./subhub/package.json": "./plugins/subhub/package.json"
   },
   "files": [
     "index.js",

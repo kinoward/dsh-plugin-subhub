@@ -1,14 +1,15 @@
 #!/usr/bin/env node
-// Standalone device-code login for the kino-codex plugin. It implements the
-// same flow the official codex CLI uses (`codex login` with device code) and
-// writes credentials in the codex file format — but the plugin reads ONLY its
-// own credential file, never another program's auth files.
+// Standalone device-code login for the kino-subhub plugin's OpenAI provider.
+// It implements the same flow the official Codex CLI uses (`codex login` with
+// device code) and writes credentials in the OpenAI auth.json format — but the
+// plugin reads ONLY its own credential file, never another program's auth
+// files.
 //
-// The web settings page's Codex section offers the same flow in the browser;
-// use this script on headless profiles or when you prefer a terminal.
+// The web settings page's "第三方订阅" section offers the same flow in the
+// browser; use this script on headless profiles or when you prefer a terminal.
 //
 // Usage:
-//   node plugins/codex/login.js [--auth-file /path/to/codex-auth.json]
+//   node plugins/subhub/login.js [--auth-file /path/to/openai-auth.json]
 //
 // Requires Node.js 18+ (global fetch). Tokens are written with file mode
 // 0600; the file content is never printed.
@@ -33,22 +34,22 @@ function parseArgs(argv) {
 			continue;
 		}
 		if (arg === "--help" || arg === "-h") {
-			console.log("Usage: node plugins/codex/login.js [--auth-file <path>]");
+			console.log("Usage: node plugins/subhub/login.js [--auth-file <path>]");
 			console.log("");
-			console.log("Sign in with your ChatGPT/Codex subscription account and save");
-			console.log("the OAuth tokens where the kino-codex plugin can read them.");
-			console.log("Defaults to ~/.kino-dsh/codex-auth.json.");
+			console.log("Sign in with your ChatGPT subscription account and save");
+			console.log("the OAuth tokens where the kino-subhub plugin can read them.");
+			console.log("Defaults to ~/.kino-dsh/openai-auth.json.");
 			process.exit(0);
 		}
 		fail(`unknown argument: ${arg}`);
 	}
-	return authFile ?? join(homedir(), ".kino-dsh", "codex-auth.json");
+	return authFile ?? join(homedir(), ".kino-dsh", "openai-auth.json");
 }
 async function main() {
 	const target = parseArgs(process.argv.slice(2));
 	const flow = await requestUserCode();
 
-	console.log("Sign in with your ChatGPT account to use Codex models:");
+	console.log("Sign in with your ChatGPT account to use OpenAI models:");
 	console.log("");
 	console.log(`  1. Open this link in your browser:  ${DEVICE_VERIFY_URL}`);
 	console.log(`  2. Enter this one-time code (expires in 15 minutes): ${flow.userCode}`);
