@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Standalone device-code login for the kino-subhub plugin's OpenAI provider.
-// It implements the same flow the official Codex CLI uses (`codex login` with
-// device code) and writes credentials in the OpenAI auth.json format — but the
-// plugin reads ONLY its own credential file, never another program's auth
-// files.
+// Standalone device-code login for the dsh-plugin-subhub plugin's OpenAI
+// provider. It implements the same flow the official Codex CLI uses
+// (`codex login` with device code) and writes credentials in the OpenAI
+// auth.json format — but the plugin reads ONLY its own credential file,
+// never another program's auth files.
 //
 // The web settings page's "第三方订阅" section offers the same flow in the
 // browser; use this script on headless profiles or when you prefer a terminal.
 //
 // Usage:
-//   node plugins/subhub/login.js [--auth-file /path/to/openai-auth.json]
+//   node login.js [--auth-file /path/to/openai-auth.json]
 //
 // Requires Node.js 18+ (global fetch). Tokens are written with file mode
 // 0600; the file content is never printed.
@@ -34,16 +34,16 @@ function parseArgs(argv) {
 			continue;
 		}
 		if (arg === "--help" || arg === "-h") {
-			console.log("Usage: node plugins/subhub/login.js [--auth-file <path>]");
+			console.log("Usage: node login.js [--auth-file <path>]");
 			console.log("");
 			console.log("Sign in with your ChatGPT subscription account and save");
-			console.log("the OAuth tokens where the kino-subhub plugin can read them.");
-			console.log("Defaults to ~/.kino-dsh/openai-auth.json.");
+			console.log("the OAuth tokens where the dsh-plugin-subhub plugin can read them.");
+			console.log("Defaults to ~/.dsh-plugin-subhub/openai-auth.json.");
 			process.exit(0);
 		}
 		fail(`unknown argument: ${arg}`);
 	}
-	return authFile ?? join(homedir(), ".kino-dsh", "openai-auth.json");
+	return authFile ?? join(homedir(), ".dsh-plugin-subhub", "openai-auth.json");
 }
 async function main() {
 	const target = parseArgs(process.argv.slice(2));

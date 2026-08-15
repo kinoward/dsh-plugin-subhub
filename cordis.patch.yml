@@ -1,6 +1,5 @@
-# 集合包的补丁层:为每个插件插一行。
-# 每行的 name 是包名子路径,与 package.json 的 exports 对应;
-# 新插件 = 新建 plugins/<name>/ 目录 + 在此追加一行。
+# dsh-plugin-subhub 的补丁层:一行挂载本插件。
+# name 是包主入口,与 package.json 的 exports "." 对应。
 - insert:
-    - id: kino-subhub
-      name: 'kino-dsh-plugins/subhub'
+    - id: dsh-plugin-subhub
+      name: 'dsh-plugin-subhub'

@@ -1,14 +1,15 @@
-// kino-subhub: use an OpenAI subscription account (ChatGPT OAuth) as an LLM
-// provider in the DeepSeek Harness.
+// dsh-plugin-subhub: use an OpenAI subscription account (ChatGPT OAuth) as an
+// LLM provider in the DeepSeek Harness.
 //
 // The adapter follows the same shape as the official llm-deepseek adapter:
-// it registers the `openai` provider route on ctx.llm, resolves credentials
-// per request, and translates the Responses-API SSE stream into harness
-// StreamChunks. Authentication is OAuth-token based: tokens are read from the
-// plugin's own credential file (`~/.kino-dsh/openai-auth.json` by default,
-// written by the bundled login flow) and refreshed through auth.openai.com
-// before they expire. Credentials of other programs (e.g. the official Codex
-// CLI's auth file) are never read.
+// it registers the `dsh-plugin-subhub-openai` provider route on ctx.llm,
+// resolves credentials per request, and translates the Responses-API SSE
+// stream into harness StreamChunks. Authentication is OAuth-token based:
+// tokens are read from the plugin's own credential file
+// (`~/.dsh-plugin-subhub/openai-auth.json` by default, written by the bundled
+// login flow) and refreshed through auth.openai.com before they expire.
+// Credentials of other programs (e.g. the official Codex CLI's auth file)
+// are never read.
 import { appendFileSync, chmodSync, closeSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
@@ -831,7 +832,7 @@ class OpenAITokenStore {
 	authFilePath() {
 		const config = this.options();
 		if (config.authFile !== void 0 && config.authFile.trim() !== "") return config.authFile.trim();
-		return join(homedir(), ".kino-dsh", "openai-auth.json");
+		return join(homedir(), ".dsh-plugin-subhub", "openai-auth.json");
 	}
 	/** New logins land in the same plugin-owned file. */
 	writeFilePath() {
@@ -863,7 +864,7 @@ class OpenAITokenStore {
 	async getToken() {
 		const path = this.authFilePath();
 		const file = this.readFile(path);
-		if (file === void 0) throw new LlmError(`openai: no authentication found at ${path}; sign in from the "Third-party subscriptions" settings page or run the bundled login script (plugins/subhub/login.js)`, "MISSING_CREDENTIAL");
+		if (file === void 0) throw new LlmError(`openai: no authentication found at ${path}; sign in from the "Third-party subscriptions" settings page or run the bundled login script (login.js)`, "MISSING_CREDENTIAL");
 		const apiKey = file.OPENAI_API_KEY;
 		if (typeof apiKey === "string" && apiKey.length > 0) return {
 			token: apiKey,
@@ -1062,8 +1063,9 @@ const OPENAI_API_BASE_URL = "https://api.openai.com/v1";
 /** Provider route this plugin owns. */
 // The provider id must stay unique: the harness's built-in provider
 // directory already declares "openai" (api-key BYO provider), so the
-// subscription route uses its own id with the same display name.
-const PROVIDER = "openai-sub";
+// subscription route uses its own dsh-plugin-subhub-<provider> id with the
+// same display name.
+const PROVIDER = "dsh-plugin-subhub-openai";
 const LOW_REASONING_EFFORT = ReasoningEffortId("low");
 const MEDIUM_REASONING_EFFORT = ReasoningEffortId("medium");
 const HIGH_REASONING_EFFORT = ReasoningEffortId("high");
@@ -1433,7 +1435,7 @@ var OpenAIAdapter = class extends LlmAdapter {
 //#endregion
 //#region login api: browser-side device login through the web server
 /** API prefix the client settings page talks to (same-origin fetch). */
-const LOGIN_API_PATH = "/api/kino-subhub";
+const LOGIN_API_PATH = "/api/dsh-plugin-subhub";
 /** Browser-trust fence: same-origin requests only (DNS-rebinding + CSRF guard). */
 function isTrustedRequest(req) {
 	const host = req.headers.host ?? "";
@@ -1961,9 +1963,9 @@ function generateImageToolDefinition(tokenStore, config, resolveAttachments, res
 }
 //#endregion
 //#region plugin: register the provider route
-const name = "subhub";
+const name = "dsh-plugin-subhub";
 const inject = ["llm"];
-const NS = settingsNamespace("openai");
+const NS = settingsNamespace("dsh-plugin-subhub-openai");
 const Config = z.object({
 	authFile: z.string(),
 	baseURL: z.string(),
@@ -2006,11 +2008,12 @@ function resolveAdapterOptions(config) {
 	};
 }
 /**
- * Register the `openai` provider route on `ctx.llm`. Connection facts resolve
- * per request from the optional `openai:` settings section (hot-reloaded, what
- * the web Models page writes) over the composition entry, and the OAuth
- * access token resolves through the OpenAITokenStore, so a refreshed login
- * reaches the very next request without restarting anything.
+ * Register the `dsh-plugin-subhub-openai` provider route on `ctx.llm`.
+ * Connection facts resolve per request from the optional
+ * `dsh-plugin-subhub-openai:` settings section (hot-reloaded, what the web
+ * Models page writes) over the composition entry, and the OAuth access token
+ * resolves through the OpenAITokenStore, so a refreshed login reaches the
+ * very next request without restarting anything.
  */
 function apply(ctx, config) {
 	let current = () => config;

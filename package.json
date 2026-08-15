@@ -1,18 +1,18 @@
 {
-  "name": "kino-dsh-plugins",
+  "name": "dsh-plugin-subhub",
   "version": "0.1.0",
-  "description": "Kino 的 DeepSeek Harness 插件集合(一个可安装组合包,内含多个插件)",
+  "description": "DeepSeek Harness 第三方订阅接入插件:登录 ChatGPT / OpenAI 订阅账户,即可在模型选择器中使用 GPT 系列模型(支持图片理解与对话内图片生成、编辑)",
   "type": "module",
-  "main": "index.js",
+  "main": "./src/index.js",
   "exports": {
-    ".": "./index.js",
-    "./subhub": "./plugins/subhub/src/index.js",
-    "./subhub/package.json": "./plugins/subhub/package.json"
+    ".": "./src/index.js",
+    "./client": "./src/client.js",
+    "./package.json": "./package.json"
   },
   "files": [
-    "index.js",
-    "cordis.patch.yml",
-    "plugins"
+    "src",
+    "login.js",
+    "cordis.patch.yml"
   ],
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.1",
@@ -33,6 +33,13 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale"
+      ]
     }
   },
   "license": "MIT"

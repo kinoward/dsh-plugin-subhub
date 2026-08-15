@@ -1,11 +1,10 @@
-// Shared ChatGPT device-code login flow for the kino-subhub plugin.
+// Shared ChatGPT device-code login flow for the dsh-plugin-subhub plugin.
 //
 // Implements the same flow the official Codex CLI uses (`codex login`):
 // request a device code from auth.openai.com, show the user the verification
 // URL + one-time code, poll until the user approves in the browser, then
 // exchange the authorization code for OAuth tokens. Used by both the host
-// plugin's login API (`plugins/subhub/src/index.js`) and the standalone
-// script (`plugins/subhub/login.js`).
+// plugin's login API (`src/index.js`) and the standalone script (`login.js`).
 const ISSUER = "https://auth.openai.com";
 const DEVICE_VERIFY_URL = `${ISSUER}/codex/device`;
 const REDIRECT_URI = `${ISSUER}/deviceauth/callback`;
