@@ -33,7 +33,7 @@ kino-ds-harness-plugin/
 
 ```sh
 # 安装整个集合(首次会自动初始化 profile)
-dsh plugin --profile <name> add github:<you>/kino-ds-harness-plugin
+dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin
 ```
 
 **只想要部分插件**:在自己 profile 的 `cordis.patch.yml` 中按 `id` 禁用对应行(用户层在所有 bundle 层之后应用、按 id 胜出):
@@ -44,7 +44,7 @@ dsh plugin --profile <name> add github:<you>/kino-ds-harness-plugin
   disabled: true
 ```
 
-纯 JavaScript、无构建步骤,用户无需为 git 依赖授予构建权限;建议安装时锁定 commit(`github:<you>/kino-ds-harness-plugin#<sha>`)。
+纯 JavaScript、无构建步骤,用户无需为 git 依赖授予构建权限;建议安装时锁定 commit(`github:kinoward/kino-ds-harness-plugin#<sha>`)。
 
 ## 进一步阅读
 

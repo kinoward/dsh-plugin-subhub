@@ -85,7 +85,7 @@ node plugins/subhub/login.js
 ## 分发(单一仓库直装)
 
 ```sh
-dsh plugin --profile <name> add github:<you>/kino-ds-harness-plugin
+dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin
 ```
 
 想只启用部分插件:在自身 profile 的 `cordis.patch.yml` 中按 `id` 禁用对应行(用户层在所有 bundle 层之后应用、按 id 胜出)。
