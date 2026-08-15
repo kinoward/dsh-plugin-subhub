@@ -8,7 +8,7 @@ GitHub 仓库:https://github.com/kinoward/kino-ds-harness-plugin
 
 ## 安装与更新
 
-要求:已安装 `dsh` CLI(DeepSeek Harness 0.1 预览版);使用随包脚本登录时需要 Node.js 18+。纯 JavaScript、无构建步骤,安装时无需授予构建权限。
+要求:已安装 `dsh` CLI(DeepSeek Harness 0.1 预览版);插件运行需要 Node.js 18.17+,使用随包脚本登录时需要 Node.js 18+。纯 JavaScript、无构建步骤,安装时无需授予构建权限。
 
 ```sh
 # 安装:`--profile` 为必填参数,名字任意;用 web 时可直接 `dsh web` 启动
@@ -20,6 +20,8 @@ dsh --profile web
 ```
 
 启动后,按下方**插件清单**进入各插件的 README,完成其中的一次性初始化(如 kino-subhub 只需一次登录授权),即可在模型选择器里使用对应插件提供的模型。更新:再次执行上面的安装命令即可。
+
+> 关于 kino-subhub 的随包登录脚本:安装后的文件位于 profile 目录的 `node_modules/kino-dsh-plugins/plugins/subhub/login.js`(在该目录下执行 `node node_modules/kino-dsh-plugins/plugins/subhub/login.js`);从 GitHub 克隆本仓库自用的开发者可以直接 `node plugins/subhub/login.js`。网页登录不受此影响,推荐优先使用网页登录。
 
 安装后,可在界面 **设置 → 插件 → 插件列表** 里按行启用/停用插件;命令行方式则是按 `id` 在自己 profile 的 `cordis.patch.yml` 中禁用对应行(用户层在所有 bundle 层之后应用、按 id 胜出):
 

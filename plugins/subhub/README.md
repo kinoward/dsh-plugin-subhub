@@ -12,11 +12,13 @@
 
 界面文案自动跟随 DeepSeek Harness 的界面语言(中文 / English);模型列表、上下文窗口、思考深度档位与图片输入能力全部实时取自你的账户接口,无需手动配置。
 
-无头环境可用随包脚本登录(等价于上面的网页流程):
+无头环境可用随包脚本登录(等价于上面的网页流程)。脚本位于安装包内:已安装用户在 profile 目录(即 `package.json` / `node_modules` 所在的 dsh profile 目录)下执行:
 
 ```sh
-node plugins/subhub/login.js
+node node_modules/kino-dsh-plugins/plugins/subhub/login.js
 ```
+
+从 GitHub 克隆本仓库自用的开发者可直接运行 `node plugins/subhub/login.js`。
 
 脚本登录后**重启 harness**,或**打开一次「第三方订阅」页**(该页的状态轮询会自动完成 provider 注册)。
 
@@ -32,7 +34,7 @@ node plugins/subhub/login.js
 
 ## 登录
 
-两种方式(「快速开始」为网页版):设置面板的「第三方订阅」页(推荐;登录框显示链接和一次性码、可一键复制,全程设备码流程,页面上永远看不到 token),或运行随包脚本 `node plugins/subhub/login.js`(打印链接和一次性码;可用 `--auth-file <路径>` 覆盖保存位置)。两种方式写入同一个插件自有文件,权限 0600。
+两种方式(「快速开始」为网页版):设置面板的「第三方订阅」页(推荐;登录框显示链接和一次性码、可一键复制,全程设备码流程,页面上永远看不到 token),或运行随包脚本(安装后的路径见「快速开始」;可用 `--auth-file <路径>` 覆盖保存位置)。两种方式写入同一个插件自有文件,权限 0600。
 
 想要自定义位置或彻底隔离:在 `$DSH_HOME/settings.yaml` 的 `openai:` 节设置 `authFile: <绝对路径>`,插件就只读写该文件。
 
@@ -89,6 +91,7 @@ node plugins/subhub/login.js
 - `gpt-5.3-codex-spark` 是纯文本模型(账户接口声明的能力),不支持图片输入。
 - 不支持 stop 序列(Responses API 没有这个参数)。
 - 不支持输出 token 上限(后端不接受 `max_output_tokens`,harness 的 `maxTokens` 不会发送)。
+- 登录 API 只接受本机(127.0.0.1 / localhost)请求:通过局域网 IP、域名或反向代理打开界面时,「第三方订阅」页会提示仅支持本机访问;远程使用时请改用 SSH 隧道(如 `ssh -L 3080:127.0.0.1:3080`)。
 - 推理强度档位随模型由接口下发(`low`/`medium`/`high`/`xhigh`/`max`/`ultra` 的子集)。
 
 ## 禁用方式
