@@ -27,6 +27,9 @@
   "devDependencies": {
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.6"
   },
+  "engines": {
+    "node": ">=18.17.0"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
