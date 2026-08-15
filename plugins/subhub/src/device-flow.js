@@ -54,7 +54,7 @@ function accountIdFromIdToken(idToken) {
  */
 async function requestUserCode(clientId = OAUTH_CLIENT_ID) {
 	const response = await postJson(`${ISSUER}/api/accounts/deviceauth/usercode`, { client_id: clientId });
-	if (response.status === 404) throw new Error("device login is not enabled for this ChatGPT subscription; use the official Codex CLI to sign in instead");
+	if (response.status === 404) throw new Error("device login is not enabled for this ChatGPT subscription, so this plugin cannot sign in with it");
 	if (!response.ok) throw new Error(`device code request failed (HTTP ${response.status})`);
 	const userCode = await response.json();
 	if (typeof userCode.device_auth_id !== "string" || typeof userCode.user_code !== "string") throw new Error("unexpected device code response");
@@ -125,9 +125,23 @@ async function exchangeAuthorizationCode(authorizationCode, codeVerifier) {
  * @returns `{status: "success", tokens}` with `tokens = {idToken,
  *   accessToken, refreshToken, accountId}`, or `{status: "expired"}`.
  */
+/** Consecutive transient poll failures tolerated before giving up. */
+const MAX_POLL_RETRIES = 5;
 async function completeDeviceLogin(flow) {
+	let failures = 0;
 	for (;;) {
-		const poll = await pollAuthorizationOnce(flow.deviceAuthId, flow.userCode, flow.expiresAtMs);
+		let poll;
+		try {
+			poll = await pollAuthorizationOnce(flow.deviceAuthId, flow.userCode, flow.expiresAtMs);
+			failures = 0;
+		} catch (error) {
+			// A transient network hiccup must not kill the 15-minute wait:
+			// retry quietly, but give up after a run of hard failures.
+			failures++;
+			if (failures > MAX_POLL_RETRIES) throw error;
+			await sleep(flow.intervalMs);
+			continue;
+		}
 		if (poll.status === "pending") {
 			await sleep(flow.intervalMs);
 			continue;

@@ -1472,34 +1472,6 @@ function localeFromParam(url) {
 	if (tag.startsWith("zh")) return "zh";
 	return void 0;
 }
-/** Read a small JSON body, rejecting oversized or malformed input. */
-function readJsonBody(req) {
-	return new Promise((resolve, reject) => {
-		const chunks = [];
-		let size = 0;
-		req.on("data", (chunk) => {
-			size += chunk.length;
-			if (size > 65536) {
-				reject(new Error("request body too large"));
-				req.destroy();
-				return;
-			}
-			chunks.push(chunk);
-		});
-		req.on("end", () => {
-			if (chunks.length === 0) {
-				resolve({});
-				return;
-			}
-			try {
-				resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-			} catch (error) {
-				reject(error);
-			}
-		});
-		req.on("error", reject);
-	});
-}
 function sendJson(res, status, payload) {
 	const body = JSON.stringify(payload);
 	res.writeHead(status, {
@@ -1549,7 +1521,6 @@ function createLoginController(tokenStore, logger, onAuthChanged, listCatalog, o
 		}
 	};
 	return {
-		hasPending: () => pending !== void 0,
 		async handle(req, res) {
 			if (!isTrustedRequest(req)) {
 				sendJson(res, 403, {
@@ -1588,8 +1559,14 @@ function createLoginController(tokenStore, logger, onAuthChanged, listCatalog, o
 					return;
 				}
 				if (path === `${LOGIN_API_PATH}/login/start` && req.method === "POST") {
-					const flow = await requestUserCode();
-					pending = flow;
+					// A login may already be in progress from another tab:
+					// reuse its flow instead of starting a second one, so the
+					// code shown in every tab matches the shared server-side
+					// poll state. Expired flows are replaced.
+					if (pending === void 0 || Date.now() >= pending.expiresAtMs) {
+						pending = await requestUserCode();
+					}
+					const flow = pending;
 					sendJson(res, 200, {
 						ok: true,
 						verificationUrl: flow.verificationUrl,
