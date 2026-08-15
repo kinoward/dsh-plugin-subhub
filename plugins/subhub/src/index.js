@@ -346,6 +346,9 @@ async function* parseSse(stream, onComment) {
 	const events = stream.pipeThrough(new TextDecoderStream()).pipeThrough(new EventSourceParserStream({ onComment }));
 	for await (const { data } of events) {
 		if (data === "[DONE]") return;
+		// Keep-alive/ping events carry no payload: JSON.parse would throw on
+		// them and kill the whole stream, so they are skipped outright.
+		if (typeof data !== "string" || data === "") continue;
 		yield data;
 	}
 }
