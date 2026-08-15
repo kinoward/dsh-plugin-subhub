@@ -9,7 +9,8 @@
 // written by the bundled login flow) and refreshed through auth.openai.com
 // before they expire. Credentials of other programs (e.g. the official Codex
 // CLI's auth file) are never read.
-import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, closeSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import z from "@deepseek-ai/schemastery";
@@ -811,6 +812,7 @@ class OpenAITokenStore {
 		this.logger = logger;
 		this.refreshing = void 0;
 		this.catalog = void 0;
+		this.catalogKey = void 0;
 		this.catalogAt = 0;
 		this.catalogFailureAt = 0;
 	}
@@ -965,9 +967,13 @@ class OpenAITokenStore {
 	 */
 	async listModels(config) {
 		const now = Date.now();
-		if (this.catalog !== void 0 && now - this.catalogAt < config.modelsCacheTtlMs) return this.catalog;
-		if (now - this.catalogFailureAt < 60000) return void 0;
+		// The cache belongs to one credential identity: switching accounts
+		// (or apikey <-> chatgpt) must invalidate it immediately, not after
+		// the TTL. The key is a truncated in-memory hash, never logged.
 		const { token, mode, accountId } = await this.getToken();
+		const credentialKey = `${mode}|${accountId ?? ""}|${createHash("sha256").update(token).digest("hex").slice(0, 16)}`;
+		if (this.catalog !== void 0 && this.catalogKey === credentialKey && now - this.catalogAt < config.modelsCacheTtlMs) return this.catalog;
+		if (now - this.catalogFailureAt < 60000) return void 0;
 		const baseURL = effectiveBaseURL(config, mode);
 		const response = await fetch(`${baseURL}/models?client_version=0.0.0`, {
 			headers: this.authHeaders(token, accountId)
@@ -1002,6 +1008,7 @@ class OpenAITokenStore {
 			};
 		});
 		this.catalogAt = now;
+		this.catalogKey = credentialKey;
 		return this.catalog;
 	}
 	/**
@@ -1483,6 +1490,19 @@ function sendJson(res, status, payload) {
 	res.end(body);
 }
 /**
+ * Non-secret identity of the credential file: path + modification time.
+ * The client compares this value to invalidate its warm model-catalog cache
+ * after a login or account switch; it carries no token material.
+ */
+function credentialFingerprint(tokenStore) {
+	try {
+		const file = tokenStore.writeFilePath();
+		return `${file}:${statSync(file).mtimeMs}`;
+	} catch {
+		return "none";
+	}
+}
+/**
  * Owns the one pending device-login flow and answers the third-party
  * subscriptions page's login API. Token values never cross the wire: the
  * browser only ever sees the public verification URL / one-time code and
@@ -1608,6 +1628,10 @@ function createLoginController(tokenStore, logger, onAuthChanged, listCatalog, o
 					sendJson(res, 200, {
 						ok: true,
 						loggedIn: tokenStore.hasTokens(),
+						// Non-secret identity of the credential file (path +
+						// mtime): the client invalidates its warm catalog cache
+						// when this changes after a login or account switch.
+						fingerprint: credentialFingerprint(tokenStore),
 						models: Array.isArray(models) ? models : []
 					});
 					return;

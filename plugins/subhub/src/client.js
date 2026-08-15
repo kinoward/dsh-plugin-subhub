@@ -323,10 +323,14 @@ window.__ModuleLoader__.load({
 			container.appendChild(section);
 		}
 		/** Render the read-only catalog into one mount container. */
-		function renderCatalogInto(container, t, loadCatalog, warmCatalog) {
+		function renderCatalogInto(container, t, loadCatalog, warmCatalog, revalidateCatalog) {
 			const cached = typeof warmCatalog === "function" ? warmCatalog() : void 0;
 			if (cached !== void 0) {
-				renderCatalogReady(container, t, cached);
+				renderCatalogReady(container, t, cached.value);
+				// Warm render is synchronous (no loading flash); revalidate in
+				// the background so a changed credential identity swaps the
+				// list in without user action.
+				if (typeof revalidateCatalog === "function") revalidateCatalog(container, t);
 				return;
 			}
 			container.textContent = "";
@@ -345,7 +349,7 @@ window.__ModuleLoader__.load({
 			status.textContent = t("modelsLoading");
 			section.appendChild(status);
 			container.appendChild(section);
-			loadCatalog().then((models) => {
+			loadCatalog(container, t).then((models) => {
 				renderCatalogReady(container, t, models);
 			}, (error) => {
 				container.textContent = "";
@@ -360,7 +364,7 @@ window.__ModuleLoader__.load({
 				retry.type = "button";
 				retry.className = "kino-sub-retry";
 				retry.textContent = t("retry");
-				retry.addEventListener("click", () => renderCatalogInto(container, t, loadCatalog, warmCatalog));
+				retry.addEventListener("click", () => renderCatalogInto(container, t, loadCatalog, warmCatalog, revalidateCatalog));
 				failed.appendChild(retry);
 				container.appendChild(failed);
 			});
@@ -378,23 +382,43 @@ window.__ModuleLoader__.load({
 			if (typeof document === "undefined") return () => {};
 			const SUBSCRIPTION_NAMES = ["OpenAI 订阅", "OpenAI subscription"];
 			const CHEVRON_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6 L8 10 L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-			const catalogCache = { at: 0, value: void 0 };
+			const catalogCache = { at: 0, value: void 0, fingerprint: void 0 };
 			let inflight;
-			const warmCatalog = () => catalogCache.value !== void 0 && Date.now() - catalogCache.at < 60000 ? catalogCache.value : void 0;
-			const loadCatalog = () => {
+			const warmCatalog = () => catalogCache.value !== void 0 && Date.now() - catalogCache.at < 60000 ? catalogCache : void 0;
+			const acceptCatalog = (result) => {
+				const models = Array.isArray(result.models) ? result.models : [];
+				catalogCache.value = models;
+				catalogCache.at = Date.now();
+				catalogCache.fingerprint = typeof result.fingerprint === "string" ? result.fingerprint : void 0;
+				return models;
+			};
+			const loadCatalog = (container, t) => {
 				const warm = warmCatalog();
-				if (warm !== void 0) return Promise.resolve(warm);
+				if (warm !== void 0) {
+					revalidateCatalog(container, t);
+					return Promise.resolve(warm.value);
+				}
 				if (inflight === void 0) {
-					inflight = api("/models").then((result) => {
-						const models = Array.isArray(result.models) ? result.models : [];
-						catalogCache.value = models;
-						catalogCache.at = Date.now();
-						return models;
-					}).finally(() => {
+					inflight = api("/models").then(acceptCatalog).finally(() => {
 						inflight = void 0;
 					});
 				}
 				return inflight;
+			};
+			/**
+			 * Quietly re-check the catalog after serving the warm list: if the
+			 * credential identity changed (login / account switch), the host
+			 * reports a different fingerprint and the fresh list replaces the
+			 * stale one as soon as it arrives.
+			 */
+			const revalidateCatalog = (container, t) => {
+				const warm = warmCatalog();
+				if (warm === void 0) return;
+				api("/models").then((result) => {
+					if (result.fingerprint !== warm.fingerprint && container.isConnected) {
+						renderCatalogReady(container, t, acceptCatalog(result));
+					}
+				}).catch(() => {});
 			};
 			const findEditButton = (row) => {
 				for (const button of row.querySelectorAll("button")) {
@@ -454,10 +478,10 @@ window.__ModuleLoader__.load({
 				}
 				if (!view.container.isConnected) {
 					editor.appendChild(view.container);
-					if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, loadCatalog, warmCatalog);
+					if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, loadCatalog, warmCatalog, revalidateCatalog);
 					return;
 				}
-				if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, loadCatalog, warmCatalog);
+				if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, loadCatalog, warmCatalog, revalidateCatalog);
 			};
 			let scanning = false;
 			const scan = () => {
@@ -487,7 +511,7 @@ window.__ModuleLoader__.load({
 					augmentRow(row);
 					if (row.children.length >= 2 && row.children[1] instanceof HTMLElement) {
 						const view = editorViews.get(row.children[1]);
-						if (view !== void 0 && view.container.isConnected) renderCatalogInto(view.container, t, loadCatalog, warmCatalog);
+						if (view !== void 0 && view.container.isConnected) renderCatalogInto(view.container, t, loadCatalog, warmCatalog, revalidateCatalog);
 					}
 				}
 			});
