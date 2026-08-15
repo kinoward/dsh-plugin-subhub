@@ -673,7 +673,10 @@ const CHATGPT_BACKEND_BASE_URL = "https://chatgpt.com/backend-api/codex";
 /** Public Responses API used when the credential is an API key. */
 const OPENAI_API_BASE_URL = "https://api.openai.com/v1";
 /** Provider route this plugin owns. */
-const PROVIDER = "openai";
+// The provider id must stay unique: the harness's built-in provider
+// directory already declares "openai" (api-key BYO provider), so the
+// subscription route uses its own id with the same display name.
+const PROVIDER = "openai-sub";
 const LOW_REASONING_EFFORT = ReasoningEffortId("low");
 const MEDIUM_REASONING_EFFORT = ReasoningEffortId("medium");
 const HIGH_REASONING_EFFORT = ReasoningEffortId("high");
@@ -981,6 +984,9 @@ function sendJson(res, status, payload) {
  */
 function createLoginController(tokenStore, logger, onAuthChanged, listCatalog) {
 	let pending;
+	// Last login state observed by the status route; drives the polling
+	// self-heal below.
+	let lastLoggedIn = false;
 	const notify = () => {
 		try {
 			onAuthChanged?.();
@@ -1003,9 +1009,18 @@ function createLoginController(tokenStore, logger, onAuthChanged, listCatalog) {
 			const path = url.pathname;
 			try {
 				if (path === `${LOGIN_API_PATH}/login/status` && req.method === "GET") {
+					const loggedIn = tokenStore.hasTokens();
+					// The hub page polls this route while mounted. Treat a
+					// changed login state as an auth change so that a login
+					// performed out of band (the bundled login script) also
+					// registers the provider — no restart required.
+					if (loggedIn !== lastLoggedIn) {
+						lastLoggedIn = loggedIn;
+						notify();
+					}
 					sendJson(res, 200, {
 						ok: true,
-						loggedIn: tokenStore.hasTokens(),
+						loggedIn,
 						authFile: tokenStore.writeFilePath(),
 						pending: pending !== void 0
 					});

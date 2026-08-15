@@ -762,7 +762,7 @@ window.__ModuleLoader__.load({
 			}, [subscribeLocale, refresh]);
 			const providers = [
 				{
-					id: "openai",
+					id: "openai-sub",
 					nameKey: "openaiName",
 					descKey: "openaiDesc",
 					logo: h(OpenAILogo, { size: 16 })

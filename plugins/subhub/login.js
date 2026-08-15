@@ -62,6 +62,6 @@ async function main() {
 	mkdirSync(dirname(target), { recursive: true });
 	writeFileSync(target, JSON.stringify(data, void 0, 2) + "\n", { mode: 384 });
 	console.log(`Logged in. Credentials saved to ${target} (mode 600).`);
-	console.log("Restart the harness or wait for the next request to pick them up.");
+	console.log("Restart the harness, or open the Third-party subscriptions settings page once — its status polling registers the provider.");
 }
 main().catch((error) => fail(error?.message ?? String(error)));

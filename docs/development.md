@@ -48,7 +48,7 @@ dsh --profile demo
 
 ## subhub 插件:登录与验证
 
-`kino-subhub` 是第三方订阅服务接入插件,当前接入 OpenAI 订阅(ChatGPT OAuth),provider 路由 id 为 `openai`。需要先登录。普通用户在设置面板侧边栏的 **第三方订阅** 页,对 **OpenAI 订阅** 卡片点「登录」即可;无头 profile 或偏好终端时运行随包脚本:
+`kino-subhub` 是第三方订阅服务接入插件,当前接入 OpenAI 订阅(ChatGPT OAuth),provider 路由 id 为 `openai-sub`(不能用 `openai`:外壳内置的可配置提供商目录已声明 `openai`,重名会让插件树加载失败)。需要先登录。普通用户在设置面板侧边栏的 **第三方订阅** 页,对 **OpenAI 订阅** 卡片点「登录」即可;无头 profile 或偏好终端时运行随包脚本:
 
 ```sh
 node plugins/subhub/login.js
@@ -58,7 +58,7 @@ node plugins/subhub/login.js
 
 插件同时带客户端半边:登录 API 是宿主插件注册的 `webServer` 前缀路由(`/api/kino-subhub/*`,只接受本机同源请求;含 `status`/`start`/`poll`/`logout`),「第三方订阅」中心页 UI 是 `plugins/subhub/src/client.js`(手写模块加载器格式),由 `plugins/subhub/package.json` 的 `dsh.client` 声明,并随 `settings.section` 插槽挂进设置侧边栏。
 
-**登录门控**:`ctx.llm` 上的 provider 路由只有凭据存在时才注册(登录成功即注册、退出登录即注销),因此「模型」页与模型选择器只显示已认证的服务;「模型」页通过 `llm/adapters-updated` 事件自动刷新。接入新订阅商(如 Anthropic、火山方舟)的约定:宿主插件提供自己的认证端点与凭据文件,客户端在中心页的 provider 数组里加一张卡片,复用同一个登录弹窗组件。
+**登录门控**:`ctx.llm` 上的 provider 路由只有凭据存在时才注册(登录成功即注册、退出登录即注销),因此「模型」页与模型选择器只显示已认证的服务;「模型」页通过 `llm/adapters-updated` 事件自动刷新。注册触发器有四处:插件挂载时、`openai:` 设置节变更时、网页登录/退出成功回调,以及「第三方订阅」页的状态轮询(登录状态变化时自愈补注册,因此**脚本登录后打开一次该页即可注册,不必重启**)。接入新订阅商(如 Anthropic、火山方舟)的约定:宿主插件提供自己的认证端点与凭据文件,客户端在中心页的 provider 数组里加一张卡片,复用同一个登录弹窗组件。
 
 验证要点:
 
