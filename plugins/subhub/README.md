@@ -1,6 +1,6 @@
 # kino-subhub
 
-第三方订阅服务接入插件:在 DeepSeek Harness 的设置侧边栏提供「第三方订阅」中心页,统一管理各订阅服务的登录与凭据;登录成功的服务会作为模型提供商出现在「模型」页与模型选择器里,退出登录即移除。当前已接入 **OpenAI 订阅**(ChatGPT OAuth),用你的 ChatGPT 订阅账户调用 GPT 模型。
+第三方订阅服务接入插件:在 DeepSeek Harness 的设置侧边栏提供「第三方订阅」中心页,统一管理各订阅服务的登录与凭据;登录成功的服务会作为模型提供商出现在「模型」页与模型选择器里,退出登录即移除。当前已接入 **OpenAI 订阅**(ChatGPT OAuth),用你的 ChatGPT 订阅账户调用 GPT 模型;支持图片理解(多模态输入),并内置 `generate_image` 工具实现对话内**文生图与图生图(图片编辑)**。
 
 - 行 id:`kino-subhub`;挂载子路径:`kino-dsh-plugins/subhub`;provider 路由 id:`openai-sub`(与外壳内置目录里的 `openai` 区分)。
 
@@ -28,6 +28,7 @@ node plugins/subhub/login.js
 - 如果自己的凭据文件里存在 `OPENAI_API_KEY`,则按 API key 模式走 `https://api.openai.com/v1`。
 - 模型列表来自 `GET https://chatgpt.com/backend-api/codex/models`,缓存 5 分钟;失败时回退到静态备用模型列表。
 - 请求走 Responses API:`POST https://chatgpt.com/backend-api/codex/responses`,SSE 流式,`store: false`。
+- 登录期间,插件还会向 harness 工具注册表注册 `generate_image` 工具(随登录/退出自动注册与注销),对话内的图片生成与编辑都由它执行,见「图片生成与编辑」。
 
 ## 登录
 
@@ -54,13 +55,15 @@ node plugins/subhub/login.js
 - **ChatGPT 订阅模式**:优先调用 `chatgpt.com/backend-api/codex/images/generations`(gpt-image 模型);若该路径不可用,自动回退到网页版合成端点 `/backend-api/synthesize`。实测 ChatGPT 后端会忽略 Responses API 的 `image_generation` 服务端工具,所以订阅模式走 harness 工具而不是 wire 工具。
 - **API key 模式**:调用 `api.openai.com/v1/images/generations`,并额外保留 Responses API 服务端 `image_generation` 工具的注入(公开 API 官方支持;后端拒绝时自动停用并重试一次)。
 
-**编辑图片(图生图)**:把要改的图放进对话(上传,或使用上一轮生成的图),让模型修改即可——模型会以 `edit_latest_image: true` 调用工具,工具自动取**会话中最近一张图**作为编辑源,经后端的图片编辑端点(`…/codex/images/edits`,API key 模式为 `api.openai.com/v1/images/edits`)进行真实编辑(只应用描述的改动、其余保持不变),而不是凭空重画。
+**编辑图片(图生图)**:把要改的图放进对话(上传,或使用上一轮生成的图),让模型修改即可——模型会以 `edit_latest_image: true` 调用工具,工具自动取**会话中最近一张图**作为编辑源,向后端图片编辑端点(`chatgpt.com/backend-api/codex/images/edits`;API key 模式为 `api.openai.com/v1/images/edits`)发送真实编辑请求,只应用描述的改动、其余保持不变,而不是凭空重画。实测 ChatGPT 后端只接受 JSON 且要求 `images` 数组(元素为 `{"image_url": "data:…"}` 对象;multipart 与单数 `image` 字段都会被拒),插件会按候选形态依次尝试并在全部失败时如实报错。
 
-生成的图片经 harness 附件服务持久化,以工具结果图片块呈现在对话里(可下载),并在后续轮次回放给模型——模型能持续看到自己生成的图。
+生成的图片经 harness 附件服务持久化,以工具结果图片块返回,并自动**回显到助手消息**里直接显示在对话中(可下载)——harness 的工具结果卡片只渲染文本,回显是让图片出现在界面的通道;图片同时会在后续轮次回放给模型,模型能持续看到自己生成或编辑的图,后续再编辑也以此图为源。
 
 注意事项:
-- 生成结果必须能被附件服务接受(PNG/JPEG/WebP/GIF);后端只返回文件引用而无内联字节时,工具会报错而不是假装成功。
-- 可用 `openai.imageModel` 覆盖生图模型(默认 `gpt-image-2`);`openai.enableImageTool: false` 关闭 API key 模式下的 wire 工具注入。
+- 生成/编辑结果必须能被附件服务接受(PNG/JPEG/WebP/GIF);后端只返回文件引用而无内联字节时,工具会报错而不是假装成功。
+- 会话中没有图片时,编辑请求会明确报错并请用户先上传图片,不会凭空重画。
+- 可用 `openai.imageModel` 覆盖生图/编辑模型(默认 `gpt-image-2`);`openai.enableImageTool: false` 关闭 API key 模式下的 wire 工具注入。
+- 图片相关失败会记录到插件自有诊断日志 `~/.kino-dsh/openai-image-debug.log`(与鉴权文件同目录;只记录异常与重试,不记录 token),排查问题时把该文件内容发给开发者即可。
 
 ## 可选设置
 
@@ -76,12 +79,13 @@ node plugins/subhub/login.js
 | `defaultReasoningEffort` | 空(用模型接口默认) | 默认思考深度:`low`/`medium`/`high`/`xhigh`/`max`/`ultra`;模型不支持的档位会回退到接口默认 |
 | `streamIdleTimeoutMs` | `300000` | 流式响应空闲超时(毫秒) |
 | `enableImageTool` | `true` | API key 模式下是否在请求里挂载 `image_generation` 服务端工具;后端拒绝时插件会自动停用并重试 |
-| `imageModel` | `gpt-image-2` | `generate_image` 工具使用的生图模型 |
+| `imageModel` | `gpt-image-2` | `generate_image` 工具使用的生图/编辑模型 |
 | `retryPolicy` | `normal`(重试 2 次) | 请求重试策略 |
 
 ## 限制
 
-- 图片可以出现在用户消息、工具结果与助手消息里:用户图片编码为 `input_image`;工具结果图片编码为 `function_call_output` 的 `input_image` 内容块;助手产出的图片(图片生成)回放时重定位为用户消息里的 `input_image`。后端拒绝时自动降级为文本占位符并重试一次。
+- 图片可以出现在用户消息、工具结果与助手消息里:用户图片编码为 `input_image`;工具结果图片编码为 `function_call_output` 的 `input_image` 内容块;助手产出的图片(生成/编辑结果的回显)回放时重定位为用户消息里的 `input_image`。后端拒绝时自动降级为文本占位符并重试一次。
+- harness 的工具结果卡片只渲染文本:工具返回的图片对模型可见,但界面显示依赖插件把图片回显到助手消息;该回显按 attachment id 去重,每张图只出现一次。
 - `gpt-5.3-codex-spark` 是纯文本模型(账户接口声明的能力),不支持图片输入。
 - 不支持 stop 序列(Responses API 没有这个参数)。
 - 不支持输出 token 上限(后端不接受 `max_output_tokens`,harness 的 `maxTokens` 不会发送)。
