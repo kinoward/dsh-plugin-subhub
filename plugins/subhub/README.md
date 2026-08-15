@@ -49,14 +49,16 @@ node plugins/subhub/login.js
 
 ## 图片生成与编辑
 
-插件会在请求里挂载 OpenAI 原生的 `image_generation` 工具(Responses API 服务端工具,由 OpenAI 后端自己执行),因此可以直接在对话里让模型**生成**图片——例如"生成一张二次元美少女微笑的 jpg 图片"。生成的图片以助手消息里的图片块呈现(经 harness 附件服务持久化,可下载),并且会被回放给模型:后续轮次里模型仍能看到自己生成的图。
+登录后,插件会向 harness 工具注册表注册一个真实的 `generate_image` 工具(随登录/退出自动注册与注销),模型可以直接在对话里**生成**图片——例如"生成一张二次元美少女微笑的 jpg 图片"。工具经账户后端执行:
 
-**编辑图片**:把图片放进对话(上传或上一轮生成的),直接要求模型修改即可——OpenAI 的编辑流程自动把输入里的第一张图作为编辑源,例如"把这张图的背景色改成浅色渐变"。修改后的新图同样以图片块呈现,且会自动进入后续轮次的上下文。
+- **ChatGPT 订阅模式**:优先调用 `chatgpt.com/backend-api/codex/images/generations`(gpt-image 模型);若该路径不可用,自动回退到网页版合成端点 `/backend-api/synthesize`。实测 ChatGPT 后端会忽略 Responses API 的 `image_generation` 服务端工具,所以订阅模式走 harness 工具而不是 wire 工具。
+- **API key 模式**:调用 `api.openai.com/v1/images/generations`,并额外保留 Responses API 服务端 `image_generation` 工具的注入(公开 API 官方支持;后端拒绝时自动停用并重试一次)。
+
+生成的图片经 harness 附件服务持久化,以工具结果图片块呈现在对话里(可下载),并在后续轮次回放给模型——模型能持续看到自己生成的图;图片编辑也基于此工作(把要改的图放进对话或直接让模型基于上一张图重新生成)。
 
 注意事项:
-- 图片生成/编辑能力由你的订阅与后端决定:若后端或所选模型拒绝 `image_generation` 工具,插件会自动停止注入该工具(进程生命周期内)并重试当前请求,不会影响其他功能;重启后重新尝试。
-- 生成的图片必须是 PNG/JPEG/WebP/GIF 之一(附件服务限制);若后端只返回文件引用而无内联字节,插件会以文本提示替代图片块。
-- 可通过 `openai.enableImageTool: false` 关闭该工具注入。
+- 生成结果必须能被附件服务接受(PNG/JPEG/WebP/GIF);后端只返回文件引用而无内联字节时,工具会报错而不是假装成功。
+- 可用 `openai.imageModel` 覆盖生图模型(默认 `gpt-image-2`);`openai.enableImageTool: false` 关闭 API key 模式下的 wire 工具注入。
 
 ## 可选设置
 
@@ -71,7 +73,8 @@ node plugins/subhub/login.js
 | `modelsCacheTtlMs` | `300000` | 模型列表缓存时长(毫秒) |
 | `defaultReasoningEffort` | 空(用模型接口默认) | 默认思考深度:`low`/`medium`/`high`/`xhigh`/`max`/`ultra`;模型不支持的档位会回退到接口默认 |
 | `streamIdleTimeoutMs` | `300000` | 流式响应空闲超时(毫秒) |
-| `enableImageTool` | `true` | 是否在请求里挂载 `image_generation` 工具(对话内生成/编辑图片);后端拒绝时插件会自动停用并重试 |
+| `enableImageTool` | `true` | API key 模式下是否在请求里挂载 `image_generation` 服务端工具;后端拒绝时插件会自动停用并重试 |
+| `imageModel` | `gpt-image-2` | `generate_image` 工具使用的生图模型 |
 | `retryPolicy` | `normal`(重试 2 次) | 请求重试策略 |
 
 ## 限制

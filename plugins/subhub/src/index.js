@@ -17,6 +17,7 @@ import { CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, CallId, LlmAdapter, 
 import { deepEqualJson, installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { MAX_TIMER_DELAY_MS, idleWatchdog, timeoutOf } from "@deepseek-ai/dsh-timeout";
 import { EventSourceParserStream } from "eventsource-parser/stream";
+import { defineTool } from "@deepseek-ai/dsh-tools";
 import { authFilePayload, exchangeAuthorizationCode, pollAuthorizationOnce, requestUserCode } from "./device-flow.js";
 /**
  * Reasoning-effort vocabulary the OpenAI backend advertises per model through
@@ -1244,12 +1245,16 @@ var OpenAIAdapter = class extends LlmAdapter {
 		const auth = await this.config.tokenStore.getToken();
 		const baseURL = effectiveBaseURL(connection, auth.mode);
 		const dispatch = applyUltraDelegationDirective(options);
-		const imageDispatch = this.includeImageTool() ? applyImageGenerationDirective(dispatch) : dispatch;
+		// The server-side wire tool is only honored by the public API; the
+		// chatgpt backend ignores it (the generate_image harness tool covers
+		// that mode), so it rides the wire in API-key mode only.
+		const includeWireImageTool = auth.mode === "apikey" && this.includeImageTool();
+		const imageDispatch = includeWireImageTool ? applyImageGenerationDirective(dispatch) : dispatch;
 		const consumer = new AbortController();
 		const watchdog = idleWatchdog(options.signal === void 0 ? consumer.signal : AbortSignal.any([options.signal, consumer.signal]), connection.streamIdleTimeoutMs, "LLM_STREAM_IDLE_TIMEOUT");
 		const iterator = this.request(imageDispatch, watchdog.signal, baseURL, auth, () => {
 			watchdog.pulse();
-		})[Symbol.asyncIterator]();
+		}, includeWireImageTool)[Symbol.asyncIterator]();
 		let exhausted = false;
 		try {
 			while (true) {
@@ -1272,7 +1277,7 @@ var OpenAIAdapter = class extends LlmAdapter {
 			} catch (_abortedTransportTeardown) {}
 		}
 	}
-	async *request(options, signal, baseURL, auth, onComment) {
+	async *request(options, signal, baseURL, auth, onComment, includeWireImageTool) {
 		const attachments = this.config.resolveAttachments?.();
 		const headers = {
 			...this.config.tokenStore.authHeaders(auth.token, auth.accountId),
@@ -1298,7 +1303,7 @@ var OpenAIAdapter = class extends LlmAdapter {
 				throw new LlmError(`OpenAI API request to ${baseURL} failed`, "TRANSPORT", { cause: error });
 			}
 		};
-		let payload = await serializeRequest(options, attachments, signal, false, this.includeImageTool());
+		let payload = await serializeRequest(options, attachments, signal, false, includeWireImageTool);
 		diagnostic(`request tools: ${(payload.tools ?? []).map((tool) => tool.type === "function" ? `function:${tool.name}` : tool.type).join(", ") || "(none)"}`);
 		let response = await post(payload);
 		if (!response.ok) {
@@ -1311,14 +1316,14 @@ var OpenAIAdapter = class extends LlmAdapter {
 				const detail = [providerError?.code, providerError?.message].filter(Boolean).join(" ");
 				diagnostic(`non-ok HTTP ${response.status}: ${detail || "(no error detail)"}`);
 				const degradeImages = hasToolResultImages(options.messages) && indicatesImageToolResultRejection(response.status, providerError);
-				const disableImageTool = this.imageToolState !== "off" && indicatesImageGenerationToolRejection(response.status, providerError);
+				const disableImageTool = includeWireImageTool && this.imageToolState !== "off" && indicatesImageGenerationToolRejection(response.status, providerError);
 				if (!degradeImages && !disableImageTool) break;
 				if (disableImageTool) {
 					this.imageToolState = "off";
 					diagnostic("backend rejected the image_generation tool; image generation disabled until restart");
 				}
 				if (degradeImages) diagnostic("backend rejected tool-result image content; degrading to text placeholders");
-				payload = await serializeRequest(options, attachments, signal, degradeImages, this.includeImageTool());
+				payload = await serializeRequest(options, attachments, signal, degradeImages, includeWireImageTool && this.includeImageTool());
 				diagnostic(`retry tools: ${(payload.tools ?? []).map((tool) => tool.type === "function" ? `function:${tool.name}` : tool.type).join(", ") || "(none)"}`);
 				response = await post(payload);
 			}
@@ -1568,6 +1573,180 @@ function createLoginController(tokenStore, logger, onAuthChanged, listCatalog, o
 	};
 }
 //#endregion
+//#region image tool: harness tool generating images through the account backend
+/** Harness-facing tool name; distinct from the server-side image_generation wire tool. */
+const IMAGE_TOOL_NAME = "generate_image";
+/** Default Images-API model; overridable through `openai.imageModel`. */
+const DEFAULT_IMAGE_MODEL = "gpt-image-2";
+/** POST one generation attempt; returns the parsed JSON payload or throws. */
+async function postImageGeneration(url, body, headers, signal) {
+	const response = await fetch(url, {
+		method: "POST",
+		headers: {
+			"content-type": "application/json",
+			...headers
+		},
+		body: JSON.stringify(body),
+		signal
+	});
+	if (!response.ok) {
+		const detail = (await response.text().catch(() => "")).slice(0, 200);
+		throw new Error(`image endpoint failed (HTTP ${response.status})${detail.length > 0 ? `: ${detail}` : ""}`);
+	}
+	return await response.json();
+}
+/**
+ * Decode provider image payloads into raw bytes. Covers inline `b64_json`,
+ * the Images-API `data[]` envelope, and hosted `url`/`image_url` links (the
+ * hosted variant is fetched with the account headers first, then without).
+ */
+async function imageBytesFromPayload(payload, headers, signal) {
+	if (payload === void 0 || payload === null || typeof payload !== "object") return void 0;
+	for (const key of ["b64_json", "base64"]) {
+		if (typeof payload[key] === "string" && payload[key].length > 0) {
+			const data = Buffer.from(payload[key], "base64");
+			const mediaType = detectImageMediaType(data) ?? "image/png";
+			return { data, mediaType };
+		}
+	}
+	if (Array.isArray(payload.data)) {
+		for (const item of payload.data) {
+			const inner = await imageBytesFromPayload(item, headers, signal);
+			if (inner !== void 0) return inner;
+		}
+	}
+	for (const key of ["url", "image_url"]) {
+		const url = payload[key];
+		if (typeof url !== "string" || !/^https?:\/\//.test(url)) continue;
+		let response;
+		try {
+			response = await fetch(url, { headers: headers ?? {}, signal });
+		} catch (error) {
+			if (signal?.aborted) throw error;
+			response = await fetch(url, { signal });
+		}
+		if (response.ok) {
+			const data = Buffer.from(await response.arrayBuffer());
+			const mediaType = detectImageMediaType(data) ?? "image/png";
+			return { data, mediaType };
+		}
+	}
+	return void 0;
+}
+/**
+ * Ask the account backend for one image. The chatgpt backend ignores the
+ * Responses-API `image_generation` tool, so generation runs through this
+ * harness tool against the backend's Images API — `…/backend-api/codex
+ * /images/generations` with ChatGPT OAuth, `api.openai.com/v1/images/generations`
+ * with an API key — with a legacy `synthesize` fallback for backend variants
+ * that only expose the web synthesis route.
+ */
+async function requestGeneratedImage(tokenStore, config, auth, prompt, size, quality, signal) {
+	const model = typeof config.imageModel === "string" && config.imageModel.length > 0 ? config.imageModel : DEFAULT_IMAGE_MODEL;
+	const headers = tokenStore.authHeaders(auth.token, auth.accountId);
+	const attempts = auth.mode === "apikey" ? [{
+		url: `${config.apiBaseURL ?? OPENAI_API_BASE_URL}/images/generations`,
+		body: { model, prompt, ...size !== void 0 ? { size } : {}, ...quality !== void 0 ? { quality } : {} }
+	}] : [{
+		url: `${config.baseURL ?? CHATGPT_BACKEND_BASE_URL}/images/generations`,
+		body: { model, prompt, ...size !== void 0 ? { size } : {}, ...quality !== void 0 ? { quality } : {} }
+	}, {
+		url: "https://chatgpt.com/backend-api/synthesize",
+		body: { prompt, image_generation_mode: model, ...size !== void 0 ? { size } : {}, ...quality !== void 0 ? { quality } : {} }
+	}];
+	let lastError;
+	for (const attempt of attempts) {
+		try {
+			const payload = await postImageGeneration(attempt.url, attempt.body, headers, signal);
+			const extracted = await imageBytesFromPayload(payload, headers, signal);
+			if (extracted === void 0) throw new Error(`image endpoint ${attempt.url} returned no inline image bytes`);
+			return {
+				...extracted,
+				name: `generated-${Date.now()}.${extracted.mediaType === "image/jpeg" ? "jpg" : extracted.mediaType.split("/")[1] ?? "png"}`
+			};
+		} catch (error) {
+			lastError = error;
+			if (signal?.aborted) throw error;
+		}
+	}
+	throw lastError ?? new Error("no image endpoint available");
+}
+/**
+ * Build the `generate_image` harness tool. Unlike the wire-level
+ * image_generation tool (which the chatgpt backend ignores), this tool is
+ * registered in the harness tool registry, so the model's prompt enumerates
+ * it and the shell executes it natively. The result content carries an image
+ * block persisted through the attachment store — the same shape read_image
+ * uses, so the conversation UI renders it and the adapter replays it as an
+ * input_image part on later turns.
+ */
+function generateImageToolDefinition(tokenStore, config, resolveAttachments) {
+	return defineTool({
+		name: IMAGE_TOOL_NAME,
+		description: "Generate an image with the connected ChatGPT/OpenAI account (gpt-image model). Call this whenever the user asks to generate, draw, create, design, or edit an image. The generated image is returned as part of this tool's result — never claim an image was generated unless this tool actually returned one.",
+		parameters: {
+			prompt: {
+				type: "string",
+				required: true,
+				description: "Detailed visual description of the image to generate: subject, style, composition, lighting, palette. Write it in the user's language when possible."
+			},
+			size: {
+				type: "string",
+				enum: ["1024x1024", "1536x1024", "1024x1536", "auto"],
+				description: "Output size; omit or use auto for the model default."
+			},
+			quality: {
+				type: "string",
+				enum: ["low", "medium", "high", "auto"],
+				description: "Output quality; omit or use auto for the model default."
+			}
+		},
+		output: {
+			schema: {
+				type: "object",
+				additionalProperties: false,
+				properties: {
+					prompt: {
+						type: "string",
+						required: true
+					},
+					ref: {
+						type: "json",
+						required: true
+					}
+				}
+			},
+			render: (_args, value) => [{
+				type: "text",
+				text: `Generated image (${value.ref.mediaType ?? "image"}, ${value.ref.width ?? "?"}x${value.ref.height ?? "?"}, ${value.ref.bytes ?? "?"} bytes).`
+			}, {
+				type: "image",
+				attachment: value.ref
+			}]
+		},
+		timeoutMs: 180000,
+		isConcurrencySafe: () => false,
+		execute: async (args, exec) => {
+			const store = resolveAttachments();
+			if (store === void 0) throw new Error("the harness attachment store is unavailable; generated images cannot be stored");
+			const prompt = String(args.prompt ?? "").trim();
+			if (prompt.length === 0) throw new Error("prompt must be a non-empty string");
+			const auth = await tokenStore.getToken();
+			const options = config();
+			const extracted = await requestGeneratedImage(tokenStore, options, auth, prompt, args.size, args.quality, exec.signal);
+			const ref = await store.saveImage({
+				data: extracted.data,
+				mediaType: extracted.mediaType,
+				name: extracted.name
+			});
+			return {
+				prompt,
+				ref
+			};
+		}
+	});
+}
+//#endregion
 //#region plugin: register the provider route
 const name = "subhub";
 const inject = ["llm"];
@@ -1582,6 +1761,8 @@ const Config = z.object({
 	streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
 	// Whether requests may carry the server-side image_generation tool.
 	enableImageTool: z.boolean().default(true),
+	// Images-API model used by the generate_image harness tool.
+	imageModel: z.string(),
 	retryPolicy: RetryPolicySchema
 });
 /**
@@ -1607,6 +1788,7 @@ function resolveAdapterOptions(config) {
 		defaultReasoningEffort: config.defaultReasoningEffort,
 		streamIdleTimeoutMs,
 		enableImageTool: config.enableImageTool ?? true,
+		imageModel: config.imageModel,
 		retryPolicy: resolveRetryPolicy(config.retryPolicy, "openai: retryPolicy")
 	};
 }
@@ -1679,6 +1861,25 @@ function apply(ctx, config) {
 	let directoryHandle;
 	let registration;
 	let registeredPolicy;
+	// The generate_image harness tool follows the same login gate as the
+	// provider: it exists only while credentials are on disk, and the tools
+	// service may mount after this row, so the registration rides the same
+	// reactive inject pattern as the attachment store below.
+	let toolsService = ctx.get("tools");
+	let unregisterImageTool;
+	const syncImageTool = () => {
+		const shouldRegister = tokenStore.hasTokens();
+		if (shouldRegister && toolsService !== void 0) {
+			if (unregisterImageTool === void 0) unregisterImageTool = toolsService.register(generateImageToolDefinition(tokenStore, options, () => attachments ?? ctx.get("attachments")));
+		} else if (!shouldRegister && unregisterImageTool !== void 0) {
+			unregisterImageTool();
+			unregisterImageTool = void 0;
+		}
+	};
+	ctx.inject(["tools"], (toolCtx) => {
+		toolsService = toolCtx.tools;
+		syncImageTool();
+	});
 	const syncRegistration = () => {
 		const shouldRegister = tokenStore.hasTokens();
 		if (shouldRegister) {
@@ -1703,6 +1904,7 @@ function apply(ctx, config) {
 				directoryHandle = void 0;
 			}
 		}
+		syncImageTool();
 	};
 	syncRegistration();
 	const syncDisplayName = () => {
