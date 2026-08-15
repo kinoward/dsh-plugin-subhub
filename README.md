@@ -38,6 +38,8 @@ dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin#<sha>
 
 更新:把 `#<sha>` 换成新 commit,再执行一次上面的命令。
 
+安装后,可在界面 **设置 → 插件 → 插件列表** 里按行启用/停用插件;命令行方式则是按上例在 profile 的 `cordis.patch.yml` 中禁用对应行。
+
 **只想要部分插件**:在自己 profile 的 `cordis.patch.yml` 中按 `id` 禁用对应行(用户层在所有 bundle 层之后应用、按 id 胜出):
 
 ```yaml
