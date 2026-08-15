@@ -1754,12 +1754,14 @@ function latestConversationImageRef(session) {
 	return void 0;
 }
 /**
- * Ask the account backend to EDIT one source image. The chatgpt endpoint
- * rejects multipart on its edit route ("Unsupported content type"), so the
- * request walks a candidate chain and records every rejection: JSON with a
- * data-URL `image`, JSON with a raw base64 `image`, then multipart. The
- * public API (API-key mode) keeps the documented multipart form first. The
- * first attempt that returns inline image bytes wins.
+ * Ask the account backend to EDIT one source image. The chatgpt backend's
+ * edit route expects a JSON `images` parameter (its own protocol — the
+ * multipart form and the singular `image` field are both rejected), so the
+ * request walks candidate shapes for that field and records every rejection:
+ * data-URL strings, `image_url`/`url` objects, raw base64, `b64_json`
+ * objects, then multipart as a last resort. The public API (API-key mode)
+ * keeps the documented multipart form first. The first attempt that returns
+ * inline image bytes wins.
  */
 async function requestEditedImage(tokenStore, config, auth, sourceRef, sourceData, prompt, size, quality, signal, debug) {
 	const model = typeof config.imageModel === "string" && config.imageModel.length > 0 ? config.imageModel : DEFAULT_IMAGE_MODEL;
@@ -1779,12 +1781,8 @@ async function requestEditedImage(tokenStore, config, auth, sourceRef, sourceDat
 		if (quality !== void 0) form.set("quality", quality);
 		return form;
 	};
-	const jsonAttempts = [{
-		body: { model, prompt, image: dataUrl, ...extras }
-	}, {
-		body: { model, prompt, image: base64, ...extras }
-	}];
-	const attempts = auth.mode === "apikey" ? [{ kind: "multipart" }, ...jsonAttempts.map((attempt) => ({ kind: "json", body: attempt.body }))] : [...jsonAttempts.map((attempt) => ({ kind: "json", body: attempt.body })), { kind: "multipart" }];
+	const imageShapes = [[dataUrl], [{ image_url: dataUrl, media_type: mediaType }], [{ url: dataUrl }], [base64], [{ b64_json: base64 }]];
+	const attempts = auth.mode === "apikey" ? [{ kind: "multipart" }, ...imageShapes.map((images) => ({ kind: "json", body: { model, prompt, images, ...extras } }))] : [...imageShapes.map((images) => ({ kind: "json", body: { model, prompt, images, ...extras } })), { kind: "multipart" }];
 	let lastError;
 	for (let index = 0; index < attempts.length; index++) {
 		const attempt = attempts[index];
@@ -1796,7 +1794,7 @@ async function requestEditedImage(tokenStore, config, auth, sourceRef, sourceDat
 				signal
 			});
 			if (!response.ok) {
-				const detail = (await response.text().catch(() => "")).slice(0, 200);
+				const detail = (await response.text().catch(() => "")).slice(0, 300);
 				throw new Error(`HTTP ${response.status}${detail.length > 0 ? `: ${detail}` : ""}`);
 			}
 			const payload = await response.json();
@@ -1808,7 +1806,8 @@ async function requestEditedImage(tokenStore, config, auth, sourceRef, sourceDat
 			};
 		} catch (error) {
 			lastError = error;
-			debug?.(`image edit attempt ${index + 1}/${attempts.length} (${attempt.kind}) failed: ${error?.message ?? error}`);
+			const shape = attempt.body?.images?.[0] ?? "multipart";
+			debug?.(`image edit attempt ${index + 1}/${attempts.length} (${attempt.kind}, ${typeof shape === "string" ? "string" : "object"}) failed: ${error?.message ?? error}`);
 			if (signal?.aborted) throw error;
 		}
 	}
