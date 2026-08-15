@@ -403,6 +403,10 @@ async function* translate(payloads, attachments, logger, imageToolIncluded) {
 	let pendingUsage;
 	/** Distinct SSE event type names observed, for diagnostics. */
 	const eventTypes = /* @__PURE__ */ new Set();
+	/** Output item kinds observed (function_call, message, image, ...). */
+	const outputItemTypes = /* @__PURE__ */ new Set();
+	/** Content part kinds observed on response.content_part.added. */
+	const contentPartTypes = /* @__PURE__ */ new Set();
 	/** Item ids of server-side image_generation calls (never tool-call blocks). */
 	const imageGenCalls = /* @__PURE__ */ new Set();
 	/** Output item ids whose image/text content has already been emitted. */
@@ -547,6 +551,7 @@ async function* translate(payloads, attachments, logger, imageToolIncluded) {
 		switch (event.type) {
 			case "response.output_item.added": {
 				const item = event.item;
+				outputItemTypes.add(item?.type ?? "unknown");
 				if (item?.type === "function_call") {
 					// Server-side tool: the backend executes it and streams the
 					// result back in this same response, so it must NOT become
@@ -682,6 +687,10 @@ async function* translate(payloads, attachments, logger, imageToolIncluded) {
 				};
 				break;
 			}
+			case "response.content_part.added": {
+				contentPartTypes.add(event.part?.type ?? event.item?.type ?? "unknown");
+				break;
+			}
 			default: break;
 		}
 	}
@@ -690,11 +699,15 @@ async function* translate(payloads, attachments, logger, imageToolIncluded) {
 	// the backend sent — this distinguishes "backend silently ignores the
 	// tool" from "image output arrived in an unhandled shape".
 	if (imageToolIncluded && logger !== void 0) {
+		const detail = [
+			`output item types: ${[...outputItemTypes].sort().join(",") || "(none)"}`,
+			`content part types: ${[...contentPartTypes].sort().join(",") || "(none)"}`
+		].join("; ");
 		if (imageGenCalls.size > 0) {
-			logger.warn(`openai: image_generation call observed (${imageGenCalls.size}); sse events: ${[...eventTypes].sort().join(",")}`);
+			logger.warn(`openai: image_generation call observed (${imageGenCalls.size}); sse events: ${[...eventTypes].sort().join(",")}; ${detail}`);
 		} else if (!imageToolNoCallLogged) {
 			imageToolNoCallLogged = true;
-			logger.warn(`openai: image_generation tool was included but the model made no image call; sse events: ${[...eventTypes].sort().join(",")}`);
+			logger.warn(`openai: image_generation tool was included but the model made no image call; sse events: ${[...eventTypes].sort().join(",")}; ${detail}`);
 		}
 	}
 	if (pendingFinish === void 0) throw new LlmError("Responses API stream ended without a terminal event", "STREAM_CLOSED");
@@ -1141,6 +1154,24 @@ function applyUltraDelegationDirective(options) {
 	return system === options.system ? options : { ...options, system };
 }
 /**
+ * Image-generation directive injected while the image_generation tool rides
+ * the wire. The harness system prompt enumerates only the coding tools, so
+ * the model otherwise ignores the extra tool and text-claims success. This
+ * makes the capability explicit — and forbids claiming an image that was
+ * never actually returned.
+ */
+const IMAGE_TOOL_DIRECTIVE = [
+	"IMAGE GENERATION CAPABILITY",
+	"Beyond the coding tools listed above, you also have the server-side \"image_generation\" tool.",
+	"- Call it whenever the user asks to generate, draw, create, design, or edit an image; put the full visual description into the tool call.",
+	"- The generated image is returned as part of your response automatically — never say an image was generated unless the tool actually returned one.",
+	"- To edit an image already in the conversation, describe the desired changes in the tool call; the first image in the conversation is the edit source."
+].join("\n");
+function applyImageGenerationDirective(options) {
+	const system = options.system === void 0 || options.system === "" ? IMAGE_TOOL_DIRECTIVE : `${options.system}\n\n${IMAGE_TOOL_DIRECTIVE}`;
+	return system === options.system ? options : { ...options, system };
+}
+/**
  * `OpenAIAdapter`: fetch + SSE against the OpenAI backend's Responses API,
  * emitting harness StreamChunks. Connection facts and the bearer token are
  * resolved once per operation, so auth rotation reaches the very next
@@ -1213,9 +1244,10 @@ var OpenAIAdapter = class extends LlmAdapter {
 		const auth = await this.config.tokenStore.getToken();
 		const baseURL = effectiveBaseURL(connection, auth.mode);
 		const dispatch = applyUltraDelegationDirective(options);
+		const imageDispatch = this.includeImageTool() ? applyImageGenerationDirective(dispatch) : dispatch;
 		const consumer = new AbortController();
 		const watchdog = idleWatchdog(options.signal === void 0 ? consumer.signal : AbortSignal.any([options.signal, consumer.signal]), connection.streamIdleTimeoutMs, "LLM_STREAM_IDLE_TIMEOUT");
-		const iterator = this.request(dispatch, watchdog.signal, baseURL, auth, () => {
+		const iterator = this.request(imageDispatch, watchdog.signal, baseURL, auth, () => {
 			watchdog.pulse();
 		})[Symbol.asyncIterator]();
 		let exhausted = false;
@@ -1721,4 +1753,4 @@ function apply(ctx, config) {
 	});
 }
 //#endregion
-export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyUltraDelegationDirective, inject, name, resolveAdapterOptions };
+export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyImageGenerationDirective, applyUltraDelegationDirective, inject, name, resolveAdapterOptions };
