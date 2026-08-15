@@ -6,9 +6,9 @@ Kino 的 DeepSeek Harness 插件集合:**唯一仓库,即一个可安装的组�
 
 GitHub 仓库:https://github.com/kinoward/kino-ds-harness-plugin
 
-## 快速开始
+## 安装与更新
 
-前提:已安装 `dsh` CLI(DeepSeek Harness 0.1 预览版)。
+要求:已安装 `dsh` CLI(DeepSeek Harness 0.1 预览版);使用随包脚本登录时需要 Node.js 18+。纯 JavaScript、无构建步骤,安装时无需授予构建权限。
 
 ```sh
 # 安装:`--profile` 为必填参数,名字任意;用 web 时可直接 `dsh web` 启动
@@ -19,34 +19,21 @@ dsh plugin --profile web add github:kinoward/kino-ds-harness-plugin
 dsh --profile web
 ```
 
-启动后,按下方**插件清单**进入各插件的 README,完成其中的一次性初始化(如 kino-subhub 只需一次登录授权),即可在模型选择器里使用对应插件提供的模型。
+启动后,按下方**插件清单**进入各插件的 README,完成其中的一次性初始化(如 kino-subhub 只需一次登录授权),即可在模型选择器里使用对应插件提供的模型。更新:再次执行上面的安装命令即可。
 
-## 插件清单
-
-| 插件 | 挂载子路径 | 说明 |
-| --- | --- | --- |
-| [**kino-subhub**](plugins/subhub/README.md) | `kino-dsh-plugins/subhub` | 第三方订阅服务接入:提供设置侧边栏的「第三方订阅」中心页,统一管理订阅登录与凭据;当前接入 OpenAI 订阅(ChatGPT OAuth),登录后作为「OpenAI 订阅」提供商出现在「模型」页与模型选择器 |
-
-## 安装与更新
-
-要求:已安装 `dsh` CLI;使用随包脚本登录时需要 Node.js 18+。纯 JavaScript、无构建步骤,安装时无需授予构建权限。
-
-```sh
-# 安装(`--profile <name>` 必填、名字任意)
-dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin
-```
-
-更新:再次执行上面的安装命令即可。
-
-安装后,可在界面 **设置 → 插件 → 插件列表** 里按行启用/停用插件;命令行方式则是按上例在 profile 的 `cordis.patch.yml` 中禁用对应行。
-
-**只想要部分插件**:在自己 profile 的 `cordis.patch.yml` 中按 `id` 禁用对应行(用户层在所有 bundle 层之后应用、按 id 胜出):
+安装后,可在界面 **设置 → 插件 → 插件列表** 里按行启用/停用插件;命令行方式则是按 `id` 在自己 profile 的 `cordis.patch.yml` 中禁用对应行(用户层在所有 bundle 层之后应用、按 id 胜出):
 
 ```yaml
 - id: kino-subhub
   name: 'kino-dsh-plugins/subhub'
   disabled: true
 ```
+
+## 插件清单
+
+| 插件 | 挂载子路径 | 说明 |
+| --- | --- | --- |
+| [**kino-subhub**](plugins/subhub/README.md) | `kino-dsh-plugins/subhub` | 第三方订阅服务接入:提供设置侧边栏的「第三方订阅」中心页,统一管理订阅登录与凭据;当前接入 OpenAI 订阅(ChatGPT OAuth),登录后作为「OpenAI 订阅」提供商出现在「模型」页与模型选择器 |
 
 ## 许可
 
