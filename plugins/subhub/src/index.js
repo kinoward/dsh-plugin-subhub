@@ -1362,7 +1362,6 @@ var OpenAIAdapter = class extends LlmAdapter {
 			}
 		};
 		let payload = await serializeRequest(options, attachments, signal, false, includeWireImageTool);
-		diagnostic(`request tools: ${(payload.tools ?? []).map((tool) => tool.type === "function" ? `function:${tool.name}` : tool.type).join(", ") || "(none)"}`);
 		let response = await post(payload);
 		if (!response.ok) {
 			// Bounded self-healing (at most two retries): degrade tool-result
@@ -1382,7 +1381,6 @@ var OpenAIAdapter = class extends LlmAdapter {
 				}
 				if (degradeImages) diagnostic("backend rejected tool-result image content; degrading to text placeholders");
 				payload = await serializeRequest(options, attachments, signal, degradeImages, includeWireImageTool && this.includeImageTool());
-				diagnostic(`retry tools: ${(payload.tools ?? []).map((tool) => tool.type === "function" ? `function:${tool.name}` : tool.type).join(", ") || "(none)"}`);
 				response = await post(payload);
 			}
 		}
