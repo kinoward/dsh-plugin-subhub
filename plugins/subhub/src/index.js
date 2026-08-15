@@ -74,6 +74,9 @@ function extractGeneratedImage(payload, fallbackMediaType) {
 	else if (typeof payload.data === "string" && payload.data.startsWith("data:")) {
 		const comma = payload.data.indexOf(",");
 		if (comma > 0) b64 = payload.data.slice(comma + 1);
+	} else if (typeof payload.image_url === "string" && payload.image_url.startsWith("data:")) {
+		const comma = payload.image_url.indexOf(",");
+		if (comma > 0) b64 = payload.image_url.slice(comma + 1);
 	}
 	if (b64 === void 0 || b64 === "") return void 0;
 	let data;
@@ -346,6 +349,8 @@ async function* parseSse(stream, onComment) {
 }
 //#endregion
 //#region translate: Responses API events -> harness StreamChunks
+/** One-shot guard: log the "model made no image call" diagnostic once per process. */
+let imageToolNoCallLogged = false;
 /** Map Responses API usage fields to the harness's disjoint TokenUsage counts. */
 function mapUsage(usage) {
 	const cacheRead = usage.input_tokens_details?.cached_tokens;
@@ -365,19 +370,26 @@ function mapUsage(usage) {
  * tool is special: its call never becomes a harness tool-call (the backend
  * executes it itself), and its `function_call_output` / `image` output items
  * become assistant image blocks persisted through the attachment store, so
- * the shell renders them like any other image. Usage and finish are deferred
- * to the terminal event (`response.completed` / `response.incomplete` /
- * `response.failed`); a stream that ends without one is untrusted and throws.
+ * the shell renders them like any other image. Output items that arrive only
+ * inside a terminal event's `response.output` (some backends skip the
+ * streamed item events) are harvested there as a fallback. Usage and finish
+ * are deferred to the terminal event (`response.completed` /
+ * `response.incomplete` / `response.failed`); a stream that ends without one
+ * is untrusted and throws.
  * @param payloads - SSE data payloads from {@link parseSse}.
  * @param attachments - the harness attachment store, or undefined.
+ * @param logger - optional host logger for one-shot diagnostics.
+ * @param imageToolIncluded - whether this request carried the image_generation tool.
  * @returns deltas as they arrive; `block-end`s, `usage`, and `finish` last.
  */
-async function* translate(payloads, attachments) {
+async function* translate(payloads, attachments, logger, imageToolIncluded) {
 	let nextIndex = 0;
 	const items = /* @__PURE__ */ new Map();
 	const order = [];
 	let pendingFinish;
 	let pendingUsage;
+	/** Distinct SSE event type names observed, for diagnostics. */
+	const eventTypes = /* @__PURE__ */ new Set();
 	/** Item ids of server-side image_generation calls (never tool-call blocks). */
 	const imageGenCalls = /* @__PURE__ */ new Set();
 	/** Output item ids whose image/text content has already been emitted. */
@@ -482,7 +494,7 @@ async function* translate(payloads, attachments) {
 		}
 		for (const part of parts) {
 			if (part === void 0 || part === null) continue;
-			if (part.type === "output_image" || part.type === "image") {
+			if (part.type === "output_image" || part.type === "image" || part.type === "image_url") {
 				emitted = true;
 				yield* imageBlock(extractGeneratedImage(part.image ?? part, part.mime_type ?? part.mediaType));
 			} else if (part.type === "input_image") {
@@ -496,6 +508,21 @@ async function* translate(payloads, attachments) {
 		}
 		if (id !== void 0 && emitted) handledImageItems.add(id);
 	}
+	/**
+	 * Fallback for backends that report output items only inside a terminal
+	 * event's `response.output` instead of streaming them: register any
+	 * image_generation calls, then emit their outputs. Items already handled
+	 * through streamed events are skipped by {@link emitImageGenerationOutput}.
+	 */
+	async function* harvestTerminalOutput(output) {
+		if (!Array.isArray(output)) return;
+		for (const item of output) {
+			if (item?.type === "function_call" && item.name === "image_generation") imageGenCalls.add(item.id);
+		}
+		for (const item of output) {
+			if (item?.type === "function_call_output" && imageGenCalls.has(item.call_id) || item?.type === "image") yield* emitImageGenerationOutput(item);
+		}
+	}
 	for await (const payload of payloads) {
 		let event;
 		try {
@@ -503,6 +530,7 @@ async function* translate(payloads, attachments) {
 		} catch {
 			throw new LlmError(`malformed SSE payload: ${payload.slice(0, 120)}`, "MALFORMED_RESPONSE");
 		}
+		eventTypes.add(event.type);
 		switch (event.type) {
 			case "response.output_item.added": {
 				const item = event.item;
@@ -602,11 +630,13 @@ async function* translate(payloads, attachments) {
 				break;
 			}
 			case "response.completed": {
+				yield* harvestTerminalOutput(event.response?.output);
 				pendingUsage = event.response?.usage !== void 0 ? mapUsage(event.response.usage) : void 0;
 				pendingFinish = order.some((block) => block.kind === "tool-call") ? { kind: "tool-calls" } : { kind: "stop" };
 				break;
 			}
 			case "response.incomplete": {
+				yield* harvestTerminalOutput(event.response?.output);
 				const reason = event.response?.incomplete_details?.reason;
 				pendingFinish = reason === "max_output_tokens" ? { kind: "max-tokens" } : {
 					kind: "error",
@@ -618,6 +648,7 @@ async function* translate(payloads, attachments) {
 				break;
 			}
 			case "response.failed": {
+				yield* harvestTerminalOutput(event.response?.output);
 				const error = event.response?.error;
 				pendingFinish = {
 					kind: "error",
@@ -639,6 +670,18 @@ async function* translate(payloads, attachments) {
 				break;
 			}
 			default: break;
+		}
+	}
+	// One-shot diagnostics: when the image tool was on the wire, tell the
+	// console whether the model actually called it and which SSE event kinds
+	// the backend sent — this distinguishes "backend silently ignores the
+	// tool" from "image output arrived in an unhandled shape".
+	if (imageToolIncluded && logger !== void 0) {
+		if (imageGenCalls.size > 0) {
+			logger.warn(`openai: image_generation call observed (${imageGenCalls.size}); sse events: ${[...eventTypes].sort().join(",")}`);
+		} else if (!imageToolNoCallLogged) {
+			imageToolNoCallLogged = true;
+			logger.warn(`openai: image_generation tool was included but the model made no image call; sse events: ${[...eventTypes].sort().join(",")}`);
 		}
 	}
 	if (pendingFinish === void 0) throw new LlmError("Responses API stream ended without a terminal event", "STREAM_CLOSED");
@@ -1229,7 +1272,8 @@ var OpenAIAdapter = class extends LlmAdapter {
 			});
 		}
 		if (!response.body) throw new LlmError("OpenAI API returned no response body", "EMPTY_RESPONSE");
-		yield* translate(parseSse(response.body, onComment), attachments);
+		const imageToolIncluded = payload.tools?.some((tool) => tool.type === "image_generation") === true;
+		yield* translate(parseSse(response.body, onComment), attachments, this.config.logger, imageToolIncluded);
 	}
 };
 //#endregion
