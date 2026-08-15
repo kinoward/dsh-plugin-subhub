@@ -1781,7 +1781,7 @@ async function requestEditedImage(tokenStore, config, auth, sourceRef, sourceDat
 		if (quality !== void 0) form.set("quality", quality);
 		return form;
 	};
-	const imageShapes = [[dataUrl], [{ image_url: dataUrl, media_type: mediaType }], [{ url: dataUrl }], [base64], [{ b64_json: base64 }]];
+	const imageShapes = [[{ image_url: dataUrl }], [{ image_url: { url: dataUrl } }], [{ image: dataUrl }], [{ file: dataUrl }]];
 	const attempts = auth.mode === "apikey" ? [{ kind: "multipart" }, ...imageShapes.map((images) => ({ kind: "json", body: { model, prompt, images, ...extras } }))] : [...imageShapes.map((images) => ({ kind: "json", body: { model, prompt, images, ...extras } })), { kind: "multipart" }];
 	let lastError;
 	for (let index = 0; index < attempts.length; index++) {
