@@ -1177,9 +1177,20 @@ function modelInfo(provider, model) {
  *    runtime cannot split tasks itself, so the model is instructed to drive
  *    the harness's own delegation tools — the closest native equivalent.
  *
+ * 3. Model-scope guidance: subagent children always run on the agent
+ *    preset's default model, never on the session's currently selected
+ *    model, so a session running this provider on a model that differs from
+ *    the preset default gets an explicit warning — and, when the workflow
+ *    tool is present, the override path that CAN pin a delegated worker to
+ *    the current provider/model.
+ *
  * The directive only references tools actually present in the request.
+ * @param options - the harness request whose system prompt is extended.
+ * @param presetDefault - the agent preset's default {provider, model}, or
+ *   undefined when the settings source is unavailable; the model-scope
+ *   guidance is skipped unless a real mismatch is known.
  */
-function applyDelegationDirective(options) {
+function applyDelegationDirective(options, presetDefault) {
 	if (!Array.isArray(options.tools)) return options;
 	const hasSubagents = options.tools.some((tool) => tool.name === "subagent" || tool.name === "subagent_fork");
 	const hasWorkflow = options.tools.some((tool) => tool.name === "workflow");
@@ -1200,6 +1211,11 @@ function applyDelegationDirective(options) {
 		"- If your next step depends on a subagent's result, call it with run_in_background: false and use the returned result directly.",
 		"- Launch a background subagent only for work whose result you integrate after its follow-up messages arrive; never pass a decision point that needs that output before collecting it."
 	);
+	const modelMismatch = hasSubagents && typeof options.provider === "string" && typeof options.model === "string" && presetDefault !== void 0 && (presetDefault.provider !== options.provider || presetDefault.model !== options.model);
+	if (modelMismatch) {
+		lines.push(`- You are running on provider "${options.provider}" model "${options.model}", but subagent children always run on the agent preset's default model ("${presetDefault.provider}" / "${presetDefault.model}") — never assume a delegated child shares your model.`);
+		if (hasWorkflow) lines.push(`- When a delegated task must run on your current model, use the workflow tool instead of the subagent tool and pass provider "${options.provider}" and model "${options.model}" to its agents.`);
+	}
 	lines.push(
 		"- Verify every delegated result yourself; never delegate final integration, decisions, or the final answer.",
 		"- Do not delegate subtasks that need the whole conversation context."
@@ -1331,7 +1347,7 @@ var OpenAIAdapter = class extends LlmAdapter {
 		const connection = this.config.options();
 		const auth = await this.config.tokenStore.getToken();
 		const baseURL = effectiveBaseURL(connection, auth.mode);
-		const dispatch = applyDelegationDirective(options);
+		const dispatch = applyDelegationDirective(options, this.config.presetDefaultModel?.());
 		// The server-side wire tool is only honored by the public API; the
 		// chatgpt backend ignores it (the generate_image harness tool covers
 		// that mode), so it rides the wire in API-key mode only.
@@ -2083,11 +2099,22 @@ function apply(ctx, config) {
 	};
 	let inferredLocale;
 	const providerDisplayName = () => (localePreference() ?? inferredLocale) === "en" ? "OpenAI subscription" : "OpenAI 订阅";
+	// The agent preset's default model, read on demand for the delegation
+	// directive's model-scope guidance (subagent children always resolve
+	// against this default, never against the session's selected model).
+	const presetDefaultModel = () => {
+		const settings = ctx.get("settings");
+		if (settings === void 0) return void 0;
+		const raw = settings.get("agent-default-model");
+		if (raw === null || typeof raw !== "object") return void 0;
+		return typeof raw.provider === "string" && typeof raw.model === "string" ? { provider: raw.provider, model: raw.model } : void 0;
+	};
 	const adapter = new OpenAIAdapter({
 		options,
 		tokenStore,
 		resolveAttachments: () => attachments ?? ctx.get("attachments"),
 		displayName: providerDisplayName,
+		presetDefaultModel,
 		logger: ctx.logger
 	});
 	// The provider only becomes visible in the Models page and the model
