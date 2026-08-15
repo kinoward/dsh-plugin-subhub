@@ -38,14 +38,17 @@ const EFFORT_DISPLAY_NAMES = {
 function flattenText(blocks) {
 	return blocks.filter((block) => block.type === "text").map((block) => block.text).join("");
 }
-/** Reject image blocks that have no wire representation on the OpenAI backend. */
+/**
+ * Reject image blocks that have no wire representation on the OpenAI
+ * backend. Assistant-produced images cannot be replayed (OpenAI has no
+ * re-sendable form for assistant image output); tool-result images are fine —
+ * the Responses API accepts `input_image` parts inside `function_call_output`
+ * output, and {@link toolResultContentParts} encodes them that way.
+ */
 function assertSerializableImages(message) {
 	if (message.role === "assistant") {
 		const images = message.content.filter((block) => block.type === "image");
 		if (images.length > 0) throw new LlmError("The OpenAI backend cannot accept image content in assistant turns.", "UNSUPPORTED_CONTENT");
-	}
-	for (const block of message.content) {
-		if (block.type === "tool-result" && contentHasImage(block.content)) throw new LlmError("The OpenAI backend cannot accept image content inside tool results (function_call_output only supports text).", "UNSUPPORTED_CONTENT");
 	}
 }
 /** Encode one stored attachment as a data URL for the wire. */
@@ -66,6 +69,44 @@ async function imageContentParts(blocks, attachments, signal) {
 			if (attachments === void 0) throw new LlmError("Image input requires the harness attachment store, which is not available in this profile.", "UNSUPPORTED_CONTENT");
 			const { ref, data } = await attachments.readImage(block.attachment, signal);
 			parts.push({ type: "input_image", image_url: imageDataUrl(ref, data) });
+		}
+	}
+	return parts;
+}
+/** Human-readable placeholder for a tool-result image that cannot ride the wire. */
+function imagePlaceholderText(attachment) {
+	const att = attachment ?? {};
+	const mediaType = typeof att.mediaType === "string" && att.mediaType.length > 0 ? att.mediaType : "image";
+	const dims = Number.isInteger(att.width) && Number.isInteger(att.height) ? ` ${att.width}x${att.height}` : "";
+	const bytes = Number.isInteger(att.bytes) && att.bytes > 0 ? ` ${att.bytes} bytes` : "";
+	return `[image omitted: ${mediaType}${dims}${bytes}]`;
+}
+/**
+ * Encode one tool result into Responses API `function_call_output` output
+ * parts. Text becomes `input_text`; image blocks are read through the
+ * harness attachment store and become `input_image` parts with an inline
+ * data URL, so the model can actually see what a tool like `read_image`
+ * returned. When `degradeImages` is set — or the attachment store is
+ * missing / the read fails — each image degrades to a text placeholder
+ * instead of throwing: a tool-result image must never brick the
+ * conversation.
+ */
+async function toolResultContentParts(blocks, attachments, signal, degradeImages) {
+	const parts = [];
+	for (const block of blocks) {
+		if (block.type === "text") parts.push({ type: "input_text", text: block.text });
+		else if (block.type === "image") {
+			if (degradeImages) {
+				parts.push({ type: "input_text", text: imagePlaceholderText(block.attachment) });
+				continue;
+			}
+			try {
+				if (attachments === void 0) throw new Error("attachment store unavailable");
+				const { ref, data } = await attachments.readImage(block.attachment, signal);
+				parts.push({ type: "input_image", image_url: imageDataUrl(ref, data) });
+			} catch {
+				parts.push({ type: "input_text", text: imagePlaceholderText(block.attachment) });
+			}
 		}
 	}
 	return parts;
@@ -91,17 +132,23 @@ function wireReasoningEffort(effort) {
  * `function_call` item (the OpenAI backend rejects the public API's embedded
  * `tool_calls` array); every tool result becomes a `function_call_output`
  * item correlated by `call_id`. User images become `input_image` content
- * parts whose bytes are read from the harness attachment store. The harness
- * `system` field is handled by the caller through `instructions`. Reasoning
- * blocks from history are dropped: OpenAI reasoning is model-internal and
- * cannot be replayed. Assistant turns that produced neither text nor tool
- * calls contribute no item.
+ * parts whose bytes are read from the harness attachment store; tool-result
+ * images ride inside the `function_call_output` output parts the same way
+ * (results without images keep the plain-string form, so untouched requests
+ * stay byte-for-byte identical). The harness `system` field is handled by
+ * the caller through `instructions`. Reasoning blocks from history are
+ * dropped: OpenAI reasoning is model-internal and cannot be replayed.
+ * Assistant turns that produced neither text nor tool calls contribute no
+ * item. When `degradeToolResultImages` is true, tool-result images become
+ * text placeholders (the single retry form used after the backend rejects
+ * `input_image` there).
  * @param messages - the harness conversation, in order.
  * @param attachments - the harness attachment store, or undefined.
  * @param signal - cancellation for attachment reads.
+ * @param degradeToolResultImages - replace tool-result images with text.
  * @returns the wire input items.
  */
-async function serializeInput(messages, attachments, signal) {
+async function serializeInput(messages, attachments, signal, degradeToolResultImages) {
 	const items = [];
 	for (const message of messages) {
 		assertSerializableImages(message);
@@ -127,11 +174,26 @@ async function serializeInput(messages, attachments, signal) {
 			role: "user",
 			content: parts.length > 0 ? parts : [{ type: "input_text", text: "" }]
 		});
-		for (const result of toolResults) items.push({
-			type: "function_call_output",
-			call_id: result.toolCallId,
-			output: flattenText(result.content) || "(no output)"
-		});
+		for (const result of toolResults) {
+			const outputParts = await toolResultContentParts(result.content, attachments, signal, degradeToolResultImages);
+			if (outputParts.some((part) => part.type === "input_image")) {
+				items.push({
+					type: "function_call_output",
+					call_id: result.toolCallId,
+					output: outputParts
+				});
+				continue;
+			}
+			// No image part: keep the historical plain-string form. Join the
+			// text parts we produced rather than re-flattening the raw blocks,
+			// so placeholders survive when an image degraded to text.
+			const text = outputParts.map((part) => part.text ?? "").join("");
+			items.push({
+				type: "function_call_output",
+				call_id: result.toolCallId,
+				output: text.length > 0 ? text : "(no output)"
+			});
+		}
 	}
 	return items;
 }
@@ -143,9 +205,10 @@ async function serializeInput(messages, attachments, signal) {
  * @param options - the harness request (model, history, system, tools, sampling).
  * @param attachments - the harness attachment store, or undefined.
  * @param signal - cancellation for attachment reads.
+ * @param degradeToolResultImages - replace tool-result images with text.
  * @returns the Responses API request body.
  */
-async function serializeRequest(options, attachments, signal) {
+async function serializeRequest(options, attachments, signal, degradeToolResultImages) {
 	const tools = options.tools?.map((tool) => ({
 		type: "function",
 		name: tool.name,
@@ -158,11 +221,37 @@ async function serializeRequest(options, attachments, signal) {
 		// The OpenAI backend rejects requests without an explicit store value.
 		store: false,
 		...options.system !== void 0 ? { instructions: options.system } : {},
-		input: await serializeInput(options.messages, attachments, signal),
+		input: await serializeInput(options.messages, attachments, signal, degradeToolResultImages),
 		...tools !== void 0 && tools.length > 0 ? { tools } : {},
 		...options.temperature !== void 0 ? { temperature: options.temperature } : {},
 		...options.reasoningEffort !== void 0 ? { reasoning: { effort: wireReasoningEffort(options.reasoningEffort) } } : {}
 	};
+}
+/** Whether any tool result in the conversation carries an image block. */
+function hasToolResultImages(messages) {
+	return messages.some((message) => message.role !== "assistant" && message.role !== "system" && message.content.some((block) => block.type === "tool-result" && contentHasImage(block.content)));
+}
+/**
+ * Whether a non-OK reply plausibly rejects `input_image` parts inside a
+ * `function_call_output`. Used only as the gate for the single
+ * degrade-and-retry, and only after {@link hasToolResultImages} was true.
+ */
+function indicatesImageToolResultRejection(status, providerError) {
+	if (status !== 400 && status !== 422) return false;
+	const text = [providerError?.code, providerError?.message].filter(Boolean).join(" ").toLowerCase();
+	return /function_call_output|function call output/.test(text) || (/image|input_image/.test(text) && /content|part|output|tool/.test(text));
+}
+/**
+ * Read the provider-facing error object from a non-OK Responses API reply.
+ * Never throws: a malformed body degrades to undefined.
+ */
+async function responseProviderError(response) {
+	try {
+		const body = await response.json();
+		return body?.error ?? (body?.detail !== void 0 ? { message: typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail) } : void 0);
+	} catch {
+		return void 0;
+	}
 }
 //#endregion
 //#region sse: byte stream -> JSON payload stream
@@ -882,32 +971,41 @@ var OpenAIAdapter = class extends LlmAdapter {
 	}
 	async *request(options, signal, baseURL, auth, onComment) {
 		const attachments = this.config.resolveAttachments?.();
-		const body = await serializeRequest(options, attachments, signal);
 		const headers = {
 			...this.config.tokenStore.authHeaders(auth.token, auth.accountId),
 			"content-type": "application/json",
 			"accept": "text/event-stream"
 		};
-		let response;
-		try {
-			response = await fetch(`${baseURL}/responses`, {
-				method: "POST",
-				headers,
-				body: JSON.stringify(body),
-				signal
-			});
-		} catch (error) {
-			if (signal.aborted) throw error;
-			throw new LlmError(`OpenAI API request to ${baseURL} failed`, "TRANSPORT", { cause: error });
+		const post = async (payload) => {
+			try {
+				return await fetch(`${baseURL}/responses`, {
+					method: "POST",
+					headers,
+					body: JSON.stringify(payload),
+					signal
+				});
+			} catch (error) {
+				if (signal.aborted) throw error;
+				throw new LlmError(`OpenAI API request to ${baseURL} failed`, "TRANSPORT", { cause: error });
+			}
+		};
+		let payload = await serializeRequest(options, attachments, signal, false);
+		let response = await post(payload);
+		if (!response.ok && hasToolResultImages(options.messages)) {
+			// The backend may refuse `input_image` parts inside a
+			// function_call_output. Retry once with those images degraded to
+			// text placeholders — a tool returning an image must never brick
+			// the conversation.
+			const providerError = await responseProviderError(response);
+			if (indicatesImageToolResultRejection(response.status, providerError)) {
+				payload = await serializeRequest(options, attachments, signal, true);
+				response = await post(payload);
+			}
 		}
 		if (!response.ok) {
+			const providerError = await responseProviderError(response);
 			let message = `OpenAI API error (HTTP ${response.status})`;
-			let providerError;
-			try {
-				const body = await response.json();
-				providerError = body?.error ?? (body?.detail !== void 0 ? { message: typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail) } : void 0);
-				if (providerError?.message) message = providerError.message;
-			} catch {}
+			if (providerError?.message) message = providerError.message;
 			const delay = providerRetryAfterMs(response.headers.get("retry-after"));
 			const id = response.headers.get("x-request-id");
 			throw new LlmError(message, httpErrorCode(response.status, providerError), {

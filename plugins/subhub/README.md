@@ -45,7 +45,7 @@ node plugins/subhub/login.js
 
 ## 图片输入(多模态)
 
-支持上传图片:图片先经 harness 附件服务保存,发送时插件从附件服务读出字节、编码为 data URL,作为 Responses API 的 `input_image` 内容块随用户消息一起发出。每个模型是否接受图片取自你账户 `/models` 接口的 `input_modalities` 字段(目前除 `gpt-5.3-codex-spark` 纯文本外,各模型都声明 `text,image`);选择不支持图片的模型时,harness 会在发送前拒绝带图消息;工具结果里带图片会得到明确报错(`function_call_output` 只支持文本)。
+支持上传图片:图片先经 harness 附件服务保存,发送时插件从附件服务读出字节、编码为 data URL,作为 Responses API 的 `input_image` 内容块随用户消息一起发出。工具结果里的图片(例如 `read_image` 的返回)同样会编码为 `function_call_output` 输出里的 `input_image` 内容块,模型可以继续"看到"工具读出的图;若后端拒绝这种形式,插件会自动降级为文本占位符并重试一次,不会中断会话。每个模型是否接受图片取自你账户 `/models` 接口的 `input_modalities` 字段(目前除 `gpt-5.3-codex-spark` 纯文本外,各模型都声明 `text,image`);选择不支持图片的模型时,harness 会在发送前拒绝带图消息。
 
 ## 可选设置
 
@@ -64,7 +64,7 @@ node plugins/subhub/login.js
 
 ## 限制
 
-- 图片只能出现在用户消息里;工具结果里带图片会报错(`function_call_output` 只支持文本输出)。
+- 图片可以出现在用户消息里,也可以出现在工具结果里(编码为 `function_call_output` 的 `input_image` 内容块;后端拒绝时自动降级为文本占位符并重试一次)。助手输出图片仍不支持回放。
 - `gpt-5.3-codex-spark` 是纯文本模型(账户接口声明的能力),不支持图片输入。
 - 不支持 stop 序列(Responses API 没有这个参数)。
 - 不支持输出 token 上限(后端不接受 `max_output_tokens`,harness 的 `maxTokens` 不会发送)。
