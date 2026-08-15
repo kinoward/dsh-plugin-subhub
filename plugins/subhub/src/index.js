@@ -1730,6 +1730,64 @@ async function requestGeneratedImage(tokenStore, config, auth, prompt, size, qua
 	throw lastError ?? new Error("no image endpoint available");
 }
 /**
+ * Scan the live session log backwards for the most recent image the
+ * conversation carries — a user upload or a previously generated image nested
+ * in a tool result. Used as the automatic source for image edits.
+ * @param session - the executing agent's live session, or undefined.
+ * @returns the newest image attachment ref, or undefined.
+ */
+function latestConversationImageRef(session) {
+	const events = session?.events;
+	if (events === void 0) return void 0;
+	for (let i = events.length - 1; i >= 0; i--) {
+		const event = events[i];
+		if (event?.type !== "user/message") continue;
+		for (const block of event.data?.content ?? []) {
+			if (block?.type === "image" && block.attachment !== void 0) return block.attachment;
+			if (block?.type === "tool-result") {
+				for (const part of block.content ?? []) {
+					if (part?.type === "image" && part.attachment !== void 0) return part.attachment;
+				}
+			}
+		}
+	}
+	return void 0;
+}
+/**
+ * Ask the account backend to EDIT one source image: multipart POST against
+ * the backend's Images edits route — `…/backend-api/codex/images/edits` with
+ * ChatGPT OAuth, `api.openai.com/v1/images/edits` with an API key — carrying
+ * the source bytes and the change prompt.
+ */
+async function requestEditedImage(tokenStore, config, auth, sourceRef, sourceData, prompt, size, quality, signal) {
+	const model = typeof config.imageModel === "string" && config.imageModel.length > 0 ? config.imageModel : DEFAULT_IMAGE_MODEL;
+	const headers = tokenStore.authHeaders(auth.token, auth.accountId);
+	const form = new FormData();
+	form.set("model", model);
+	form.set("prompt", prompt);
+	form.set("image", new Blob([sourceData], { type: sourceRef.mediaType ?? "image/png" }), sourceRef.name ?? "source.png");
+	if (size !== void 0) form.set("size", size);
+	if (quality !== void 0) form.set("quality", quality);
+	const url = `${auth.mode === "apikey" ? config.apiBaseURL ?? OPENAI_API_BASE_URL : config.baseURL ?? CHATGPT_BACKEND_BASE_URL}/images/edits`;
+	const response = await fetch(url, {
+		method: "POST",
+		headers,
+		body: form,
+		signal
+	});
+	if (!response.ok) {
+		const detail = (await response.text().catch(() => "")).slice(0, 200);
+		throw new Error(`image edit endpoint failed (HTTP ${response.status})${detail.length > 0 ? `: ${detail}` : ""}`);
+	}
+	const payload = await response.json();
+	const extracted = await imageBytesFromPayload(payload, headers, signal);
+	if (extracted === void 0) throw new Error(`image edit endpoint ${url} returned no inline image bytes`);
+	return {
+		...extracted,
+		name: `edited-${Date.now()}.${extracted.mediaType === "image/jpeg" ? "jpg" : extracted.mediaType.split("/")[1] ?? "png"}`
+	};
+}
+/**
  * Build the `generate_image` harness tool. Unlike the wire-level
  * image_generation tool (which the chatgpt backend ignores), this tool is
  * registered in the harness tool registry, so the model's prompt enumerates
@@ -1741,12 +1799,16 @@ async function requestGeneratedImage(tokenStore, config, auth, prompt, size, qua
 function generateImageToolDefinition(tokenStore, config, resolveAttachments) {
 	return defineTool({
 		name: IMAGE_TOOL_NAME,
-		description: "Generate an image with the connected ChatGPT/OpenAI account (gpt-image model). Call this whenever the user asks to generate, draw, create, design, or edit an image. The generated image is returned as part of this tool's result — never claim an image was generated unless this tool actually returned one.",
+		description: "Generate or edit an image with the connected ChatGPT/OpenAI account (gpt-image model). Call this whenever the user asks to generate, draw, create, or design an image; to EDIT an existing image (change colors, style, or details while keeping the rest), set edit_latest_image to true — the tool then uses the most recent image already in the conversation as the source. The image is returned as part of this tool's result — never claim an image was generated or edited unless this tool actually returned one.",
 		parameters: {
 			prompt: {
 				type: "string",
 				required: true,
-				description: "Detailed visual description of the image to generate: subject, style, composition, lighting, palette. Write it in the user's language when possible."
+				description: "Detailed visual description. For a new image: the full subject, style, composition, lighting, palette. For an edit: describe only the desired changes and what must stay unchanged. Write it in the user's language when possible."
+			},
+			edit_latest_image: {
+				type: "boolean",
+				description: "Set to true to edit the most recent image already in the conversation (image-to-image): only the described changes are applied and everything else is kept. Requires an image in the conversation; leave unset for a brand-new image."
 			},
 			size: {
 				type: "string",
@@ -1791,7 +1853,16 @@ function generateImageToolDefinition(tokenStore, config, resolveAttachments) {
 			if (prompt.length === 0) throw new Error("prompt must be a non-empty string");
 			const auth = await tokenStore.getToken();
 			const options = config();
-			const extracted = await requestGeneratedImage(tokenStore, options, auth, prompt, args.size, args.quality, exec.signal);
+			const edit = args.edit_latest_image === true;
+			let extracted;
+			if (edit) {
+				const sourceRef = latestConversationImageRef(exec.agent?.session);
+				if (sourceRef === void 0) throw new Error("edit_latest_image was requested but the conversation carries no image yet; ask the user to upload an image first, or generate one");
+				const source = await store.readImage(sourceRef, exec.signal);
+				extracted = await requestEditedImage(tokenStore, options, auth, sourceRef, source.data, prompt, args.size, args.quality, exec.signal);
+			} else {
+				extracted = await requestGeneratedImage(tokenStore, options, auth, prompt, args.size, args.quality, exec.signal);
+			}
 			const ref = await store.saveImage({
 				data: extracted.data,
 				mediaType: extracted.mediaType,

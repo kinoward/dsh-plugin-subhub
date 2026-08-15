@@ -54,7 +54,9 @@ node plugins/subhub/login.js
 - **ChatGPT 订阅模式**:优先调用 `chatgpt.com/backend-api/codex/images/generations`(gpt-image 模型);若该路径不可用,自动回退到网页版合成端点 `/backend-api/synthesize`。实测 ChatGPT 后端会忽略 Responses API 的 `image_generation` 服务端工具,所以订阅模式走 harness 工具而不是 wire 工具。
 - **API key 模式**:调用 `api.openai.com/v1/images/generations`,并额外保留 Responses API 服务端 `image_generation` 工具的注入(公开 API 官方支持;后端拒绝时自动停用并重试一次)。
 
-生成的图片经 harness 附件服务持久化,以工具结果图片块呈现在对话里(可下载),并在后续轮次回放给模型——模型能持续看到自己生成的图;图片编辑也基于此工作(把要改的图放进对话或直接让模型基于上一张图重新生成)。
+**编辑图片(图生图)**:把要改的图放进对话(上传,或使用上一轮生成的图),让模型修改即可——模型会以 `edit_latest_image: true` 调用工具,工具自动取**会话中最近一张图**作为编辑源,经后端的图片编辑端点(`…/codex/images/edits`,API key 模式为 `api.openai.com/v1/images/edits`)进行真实编辑(只应用描述的改动、其余保持不变),而不是凭空重画。
+
+生成的图片经 harness 附件服务持久化,以工具结果图片块呈现在对话里(可下载),并在后续轮次回放给模型——模型能持续看到自己生成的图。
 
 注意事项:
 - 生成结果必须能被附件服务接受(PNG/JPEG/WebP/GIF);后端只返回文件引用而无内联字节时,工具会报错而不是假装成功。
