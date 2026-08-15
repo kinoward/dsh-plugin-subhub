@@ -9,7 +9,7 @@
 // written by the bundled login flow) and refreshed through auth.openai.com
 // before they expire. Credentials of other programs (e.g. the official Codex
 // CLI's auth file) are never read.
-import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import z from "@deepseek-ai/schemastery";
@@ -351,6 +351,19 @@ async function* parseSse(stream, onComment) {
 //#region translate: Responses API events -> harness StreamChunks
 /** One-shot guard: log the "model made no image call" diagnostic once per process. */
 let imageToolNoCallLogged = false;
+/**
+ * Append one diagnostic line to the plugin-owned debug log (next to the
+ * credential file). Console output is not always visible to the user (the
+ * web server may run detached), so image-tool diagnostics are also persisted
+ * where both the user and the agent can read them. Never throws.
+ */
+function appendImageDebug(path, message) {
+	if (path === void 0 || path === "") return;
+	try {
+		mkdirSync(dirname(path), { recursive: true });
+		appendFileSync(path, `[${new Date().toISOString()}] ${message}\n`);
+	} catch {}
+}
 /** Map Responses API usage fields to the harness's disjoint TokenUsage counts. */
 function mapUsage(usage) {
 	const cacheRead = usage.input_tokens_details?.cached_tokens;
@@ -1146,6 +1159,14 @@ var OpenAIAdapter = class extends LlmAdapter {
 		const config = this.config.options();
 		return this.imageToolState !== "off" && config.enableImageTool !== false;
 	}
+	/** Plugin-owned diagnostic log path beside the credential file. */
+	imageDebugLogPath() {
+		try {
+			return join(dirname(this.config.tokenStore.authFilePath()), "openai-image-debug.log");
+		} catch {
+			return void 0;
+		}
+	}
 	providerInfo(provider) {
 		return {
 			id: provider,
@@ -1226,6 +1247,12 @@ var OpenAIAdapter = class extends LlmAdapter {
 			"content-type": "application/json",
 			"accept": "text/event-stream"
 		};
+		const debugPath = this.imageDebugLogPath();
+		/** Console warn + plugin-owned debug file, so diagnostics survive detached consoles. */
+		const diagnostic = (message) => {
+			this.config.logger?.warn(`openai: ${message}`);
+			appendImageDebug(debugPath, message);
+		};
 		const post = async (payload) => {
 			try {
 				return await fetch(`${baseURL}/responses`, {
@@ -1240,6 +1267,7 @@ var OpenAIAdapter = class extends LlmAdapter {
 			}
 		};
 		let payload = await serializeRequest(options, attachments, signal, false, this.includeImageTool());
+		diagnostic(`request tools: ${(payload.tools ?? []).map((tool) => tool.type === "function" ? `function:${tool.name}` : tool.type).join(", ") || "(none)"}`);
 		let response = await post(payload);
 		if (!response.ok) {
 			// Bounded self-healing (at most two retries): degrade tool-result
@@ -1248,14 +1276,18 @@ var OpenAIAdapter = class extends LlmAdapter {
 			// rejects it — neither condition may brick the conversation.
 			for (let retry = 0; retry < 2; retry++) {
 				const providerError = await responseProviderError(response);
+				const detail = [providerError?.code, providerError?.message].filter(Boolean).join(" ");
+				diagnostic(`non-ok HTTP ${response.status}: ${detail || "(no error detail)"}`);
 				const degradeImages = hasToolResultImages(options.messages) && indicatesImageToolResultRejection(response.status, providerError);
 				const disableImageTool = this.imageToolState !== "off" && indicatesImageGenerationToolRejection(response.status, providerError);
 				if (!degradeImages && !disableImageTool) break;
 				if (disableImageTool) {
 					this.imageToolState = "off";
-					this.config.logger?.warn("openai: backend rejected the image_generation tool; image generation disabled until restart");
+					diagnostic("backend rejected the image_generation tool; image generation disabled until restart");
 				}
+				if (degradeImages) diagnostic("backend rejected tool-result image content; degrading to text placeholders");
 				payload = await serializeRequest(options, attachments, signal, degradeImages, this.includeImageTool());
+				diagnostic(`retry tools: ${(payload.tools ?? []).map((tool) => tool.type === "function" ? `function:${tool.name}` : tool.type).join(", ") || "(none)"}`);
 				response = await post(payload);
 			}
 		}
@@ -1273,7 +1305,7 @@ var OpenAIAdapter = class extends LlmAdapter {
 		}
 		if (!response.body) throw new LlmError("OpenAI API returned no response body", "EMPTY_RESPONSE");
 		const imageToolIncluded = payload.tools?.some((tool) => tool.type === "image_generation") === true;
-		yield* translate(parseSse(response.body, onComment), attachments, this.config.logger, imageToolIncluded);
+		yield* translate(parseSse(response.body, onComment), attachments, { warn: diagnostic }, imageToolIncluded);
 	}
 };
 //#endregion
