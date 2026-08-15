@@ -43,6 +43,7 @@ window.__ModuleLoader__.load({
 			intro: "在这里管理第三方订阅:登录成功后,对应服务会出现在「模型」页;退出登录后即移除。模型与思考深度请在「模型」页的服务行中设置。",
 			checking: "正在读取登录状态…",
 			statusError: "无法读取登录状态:{message}",
+			localOnly: "该功能仅支持在本机打开时使用(地址为 127.0.0.1 或 localhost)。请改用本机地址打开此页面。",
 			retry: "重试",
 			statusLoggedIn: "已登录",
 			statusLoggedOut: "未登录",
@@ -90,6 +91,7 @@ window.__ModuleLoader__.load({
 			intro: "Manage third-party subscriptions here: after a successful sign-in the provider appears on the Models page, and signing out removes it. Models and reasoning levels are configured on the Models page.",
 			checking: "Reading login status…",
 			statusError: "Could not read login status: {message}",
+			localOnly: "This feature only accepts requests from this machine (127.0.0.1 / localhost). Open the page via a local address.",
 			retry: "Retry",
 			statusLoggedIn: "Signed in",
 			statusLoggedOut: "Signed out",
@@ -208,7 +210,14 @@ window.__ModuleLoader__.load({
 			} catch {
 				body = {};
 			}
-			if (!response.ok) throw new Error(body?.message ?? `HTTP ${response.status}`);
+			if (!response.ok) {
+				if (response.status === 403) {
+					// The host trust fence only accepts localhost requests:
+					// explain that instead of the bare "forbidden".
+					throw new Error(uiLocale.startsWith("en") ? en.localOnly : zh.localOnly);
+				}
+				throw new Error(body?.message ?? `HTTP ${response.status}`);
+			}
 			return body;
 		}
 		/** Inline OpenAI logomark (official mark, drawn in currentColor). */
@@ -380,7 +389,10 @@ window.__ModuleLoader__.load({
 		 */
 		function installModelCatalogAugmentation(ctx, t) {
 			if (typeof document === "undefined") return () => {};
-			const SUBSCRIPTION_NAMES = ["OpenAI 订阅", "OpenAI subscription"];
+			// The shell's provider row exposes no stable identifier, so rows
+			// are matched by display name — taken from the dictionaries (both
+			// languages), so there is a single source of truth for the name.
+			const SUBSCRIPTION_NAMES = [zh.openaiName, en.openaiName];
 			const CHEVRON_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6 L8 10 L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 			const catalogCache = { at: 0, value: void 0, fingerprint: void 0 };
 			let inflight;
