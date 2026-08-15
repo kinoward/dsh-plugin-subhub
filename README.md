@@ -23,9 +23,9 @@ dsh --profile web
 
 ## 插件清单
 
-| 插件(id) | 挂载子路径 | 说明 |
+| 插件 | 挂载子路径 | 说明 |
 | --- | --- | --- |
-| [**kino-subhub**](plugins/subhub/README.md)(id: `kino-subhub`) | `kino-dsh-plugins/subhub` | 第三方订阅服务接入:提供设置侧边栏的「第三方订阅」中心页,统一管理订阅登录与凭据;当前接入 OpenAI 订阅(ChatGPT OAuth),登录后作为「OpenAI 订阅」提供商出现在「模型」页与模型选择器 |
+| [**kino-subhub**](plugins/subhub/README.md) | `kino-dsh-plugins/subhub` | 第三方订阅服务接入:提供设置侧边栏的「第三方订阅」中心页,统一管理订阅登录与凭据;当前接入 OpenAI 订阅(ChatGPT OAuth),登录后作为「OpenAI 订阅」提供商出现在「模型」页与模型选择器 |
 
 ## 安装与更新
 
