@@ -11,8 +11,9 @@ GitHub 仓库:https://github.com/kinoward/kino-ds-harness-plugin
 前提:已安装 `dsh` CLI(DeepSeek Harness 0.1 预览版)。
 
 ```sh
-# 安装(profile 名可自定,以下用 web 为例;首次会自动初始化 profile)
-dsh plugin --profile web add github:kinoward/kino-ds-harness-plugin
+# 安装:一律锁定到具体 commit,保证版本可复现、不受上游变动影响
+# (profile 名可自定,以下用 web 为例;首次会自动初始化 profile)
+dsh plugin --profile web add github:kinoward/kino-ds-harness-plugin#<sha>
 
 # 启动
 dsh --profile web
@@ -31,16 +32,11 @@ dsh --profile web
 要求:已安装 `dsh` CLI;使用随包脚本登录时需要 Node.js 18+。纯 JavaScript、无构建步骤,安装时无需授予构建权限。
 
 ```sh
-dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin
-```
-
-建议锁定到具体 commit,避免上游变动影响使用:
-
-```sh
+# 安装(锁定到具体 commit;`<sha>` 取仓库提交记录里的任一 commit)
 dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin#<sha>
 ```
 
-更新:再次执行上面的安装命令即可;锁定过 commit 的,把 `#<sha>` 替换为新 commit。
+更新:把 `#<sha>` 换成新 commit,再执行一次上面的命令。
 
 **只想要部分插件**:在自己 profile 的 `cordis.patch.yml` 中按 `id` 禁用对应行(用户层在所有 bundle 层之后应用、按 id 胜出):
 
