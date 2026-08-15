@@ -1157,30 +1157,53 @@ function modelInfo(provider, model) {
 	};
 }
 /**
- * The proactive-delegation directive injected while ultra effort is selected
- * AND the agent carries delegation tools (subagent / workflow — both mounted
- * by the agent preset for every model and effort, per the harness tool
- * assembly, which never filters by model). This mirrors the official codex
- * CLI's Ultra behavior (max reasoning + MultiAgentMode::Proactive): the
- * runtime cannot split tasks itself, so the model is instructed to drive the
- * harness's own delegation tools — the closest native equivalent. The
- * directive only references tools actually present in the request.
+ * Delegation directive injected whenever the agent carries delegation tools
+ * (subagent / workflow — both mounted by the agent preset for every model and
+ * effort, per the harness tool assembly, which never filters by model). Two
+ * halves:
+ *
+ * 1. Result-collection discipline, applied at EVERY reasoning effort: a
+ *    background subagent call returns only its id — never the result — and
+ *    the child's output arrives later as follow-up messages. Models that
+ *    treat the id as the answer continue past the step that needed the
+ *    output, or sit idle while the report waits in the user-visible
+ *    queued-messages dock. So the directive states the contract at the
+ *    decision point: delegate in the foreground (run_in_background: false)
+ *    when the next step depends on the result; reserve background children
+ *    for work integrated after their follow-up messages arrive.
+ *
+ * 2. Under ultra effort, proactive delegation mirrors the official codex
+ *    CLI's Ultra behavior (max reasoning + MultiAgentMode::Proactive): the
+ *    runtime cannot split tasks itself, so the model is instructed to drive
+ *    the harness's own delegation tools — the closest native equivalent.
+ *
+ * The directive only references tools actually present in the request.
  */
-function applyUltraDelegationDirective(options) {
-	if (options.reasoningEffort !== "ultra") return options;
+function applyDelegationDirective(options) {
 	if (!Array.isArray(options.tools)) return options;
 	const hasSubagents = options.tools.some((tool) => tool.name === "subagent" || tool.name === "subagent_fork");
 	const hasWorkflow = options.tools.some((tool) => tool.name === "workflow");
 	if (!hasSubagents && !hasWorkflow) return options;
-	const lines = [
-		"ULTRA MODE — PROACTIVE TASK DELEGATION",
-		"Reasoning depth is already at maximum. To make the most of it, delegate proactively:",
-		"- Decompose the task into independent subtasks."
-	];
-	if (hasSubagents) lines.push("- For every subtask that can run autonomously, launch a background subagent (subagent tool) with a complete, standalone prompt. Start independent subagents in parallel.");
-	if (hasWorkflow) lines.push("- For work that fans out over many independent pieces, use the workflow tool to run them concurrently.");
-	lines.push("- Collect and verify every delegated result yourself; never delegate final integration, decisions, or the final answer.");
-	lines.push("- Do not delegate subtasks that need the whole conversation context.");
+	const lines = [];
+	if (options.reasoningEffort === "ultra") {
+		lines.push(
+			"ULTRA MODE — PROACTIVE TASK DELEGATION",
+			"Reasoning depth is already at maximum. To make the most of it, delegate proactively:",
+			"- Decompose the task into independent subtasks."
+		);
+		if (hasSubagents) lines.push("- For every subtask that can run autonomously, launch a subagent (subagent tool) with a complete, standalone prompt. Use background delegation (run_in_background: true) only when you can continue other work until the child's follow-up messages arrive; otherwise delegate in the foreground (run_in_background: false). Start independent background subagents in parallel.");
+		if (hasWorkflow) lines.push("- For work that fans out over many independent pieces, use the workflow tool to run them concurrently.");
+	}
+	lines.push("DELEGATION RESULT COLLECTION");
+	if (hasSubagents) lines.push(
+		"- A background subagent call returns only its id, not the result: the child's output arrives later as follow-up messages, never inside the tool result.",
+		"- If your next step depends on a subagent's result, call it with run_in_background: false and use the returned result directly.",
+		"- Launch a background subagent only for work whose result you integrate after its follow-up messages arrive; never pass a decision point that needs that output before collecting it."
+	);
+	lines.push(
+		"- Verify every delegated result yourself; never delegate final integration, decisions, or the final answer.",
+		"- Do not delegate subtasks that need the whole conversation context."
+	);
 	const directive = lines.join("\n");
 	const system = options.system === void 0 || options.system === "" ? directive : `${options.system}\n\n${directive}`;
 	return system === options.system ? options : { ...options, system };
@@ -1308,7 +1331,7 @@ var OpenAIAdapter = class extends LlmAdapter {
 		const connection = this.config.options();
 		const auth = await this.config.tokenStore.getToken();
 		const baseURL = effectiveBaseURL(connection, auth.mode);
-		const dispatch = applyUltraDelegationDirective(options);
+		const dispatch = applyDelegationDirective(options);
 		// The server-side wire tool is only honored by the public API; the
 		// chatgpt backend ignores it (the generate_image harness tool covers
 		// that mode), so it rides the wire in API-key mode only.
@@ -2171,4 +2194,4 @@ function apply(ctx, config) {
 	});
 }
 //#endregion
-export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyImageGenerationDirective, applyUltraDelegationDirective, inject, name, resolveAdapterOptions };
+export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, name, resolveAdapterOptions };
