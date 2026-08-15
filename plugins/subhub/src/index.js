@@ -1654,8 +1654,13 @@ async function postImageGeneration(url, body, headers, signal) {
 /**
  * Decode provider image payloads into raw bytes. Covers inline `b64_json`,
  * the Images-API `data[]` envelope, and hosted `url`/`image_url` links (the
- * hosted variant is fetched with the account headers first, then without).
+ * hosted variant is fetched with the account headers first, then without —
+ * but credentials are only ever attached for OpenAI-owned hosts).
  */
+const OPENAI_IMAGE_HOSTS = ["api.openai.com", "chatgpt.com", "oaistatic.com", "oaiusercontent.com"];
+function isOpenAiHost(hostname) {
+	return OPENAI_IMAGE_HOSTS.some((host) => hostname === host || hostname.endsWith(`.${host}`));
+}
 async function imageBytesFromPayload(payload, headers, signal) {
 	if (payload === void 0 || payload === null || typeof payload !== "object") return void 0;
 	for (const key of ["b64_json", "base64"]) {
@@ -1674,11 +1679,25 @@ async function imageBytesFromPayload(payload, headers, signal) {
 	for (const key of ["url", "image_url"]) {
 		const url = payload[key];
 		if (typeof url !== "string" || !/^https?:\/\//.test(url)) continue;
-		let response;
+		let hostname;
 		try {
-			response = await fetch(url, { headers: headers ?? {}, signal });
-		} catch (error) {
-			if (signal?.aborted) throw error;
+			hostname = new URL(url).hostname;
+		} catch {
+			continue;
+		}
+		// Send the account credentials only to OpenAI-owned hosts; foreign
+		// hosts are fetched unauthenticated from the start. No download size
+		// limit is applied: generated images are provider-controlled.
+		const credentialed = headers !== void 0 && isOpenAiHost(hostname);
+		let response;
+		if (credentialed) {
+			try {
+				response = await fetch(url, { headers, signal });
+			} catch (error) {
+				if (signal?.aborted) throw error;
+				response = await fetch(url, { signal });
+			}
+		} else {
 			response = await fetch(url, { signal });
 		}
 		if (response.ok) {
@@ -1692,10 +1711,11 @@ async function imageBytesFromPayload(payload, headers, signal) {
 /**
  * Ask the account backend for one image. The chatgpt backend ignores the
  * Responses-API `image_generation` tool, so generation runs through this
- * harness tool against the backend's Images API — `…/backend-api/codex
- * /images/generations` with ChatGPT OAuth, `api.openai.com/v1/images/generations`
- * with an API key — with a legacy `synthesize` fallback for backend variants
- * that only expose the web synthesis route.
+ * harness tool against the backend's Images API —
+ * `chatgpt.com/backend-api/codex/images/generations` with ChatGPT OAuth,
+ * `api.openai.com/v1/images/generations` with an API key — with a legacy
+ * `synthesize` fallback for backend variants that only expose the web
+ * synthesis route.
  */
 async function requestGeneratedImage(tokenStore, config, auth, prompt, size, quality, signal) {
 	const model = typeof config.imageModel === "string" && config.imageModel.length > 0 ? config.imageModel : DEFAULT_IMAGE_MODEL;
