@@ -10,4 +10,5 @@ dist/
 *.tgz
 # 本地临时验证目录与 npm 误用产物(仓库统一用 pnpm)
 .tmp-repro/
+.pnpm-store/
 package-lock.json
