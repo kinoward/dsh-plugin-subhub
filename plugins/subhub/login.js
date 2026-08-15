@@ -13,7 +13,7 @@
 //
 // Requires Node.js 18+ (global fetch). Tokens are written with file mode
 // 0600; the file content is never printed.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import process from "node:process";
@@ -61,6 +61,9 @@ async function main() {
 	const data = authFilePayload(result.tokens);
 	mkdirSync(dirname(target), { recursive: true });
 	writeFileSync(target, JSON.stringify(data, void 0, 2) + "\n", { mode: 384 });
+	// The write mode only applies to newly created files: re-tighten the
+	// permissions so a pre-existing file can never stay readable by others.
+	chmodSync(target, 384);
 	console.log(`Logged in. Credentials saved to ${target} (mode 600).`);
 	console.log("Restart the harness, or open the Third-party subscriptions settings page once — its status polling registers the provider.");
 }

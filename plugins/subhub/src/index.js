@@ -758,6 +758,8 @@ const REFRESH_TOKEN_URL = "https://auth.openai.com/oauth/token";
 const ACCESS_TOKEN_REFRESH_WINDOW_MS = 5 * 60 * 1000;
 /** How long to wait for another process holding the refresh lock. */
 const REFRESH_LOCK_WAIT_MS = 5000;
+/** Refresh locks older than this are stale leftovers from a crashed process. */
+const STALE_LOCK_MS = 10 * 60 * 1000;
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -897,6 +899,17 @@ class OpenAITokenStore {
 				lock = openSync(lockPath, "wx");
 			} catch (error) {
 				if (error?.code !== "EEXIST") throw error;
+				// A crashed process can leave the lock file behind; every
+				// later refresh would then waste the full wait window forever.
+				// Reclaim clearly stale locks (a live holder's lock is always
+				// fresh) and retry immediately instead of sleeping.
+				try {
+					const stale = Date.now() - statSync(lockPath).mtimeMs > STALE_LOCK_MS;
+					if (stale) {
+						rmSync(lockPath, { force: true });
+						continue;
+					}
+				} catch {}
 				await sleep(150);
 			}
 		}
@@ -955,8 +968,14 @@ class OpenAITokenStore {
 		try {
 			mkdirSync(dirname(path), { recursive: true });
 			writeFileSync(path, JSON.stringify(data, void 0, 2) + "\n", { mode: 384 });
+			// The write mode only applies to newly created files: re-tighten
+			// the permissions so a pre-existing credential file can never
+			// stay readable by others (a no-op on platforms without chmod).
+			chmodSync(path, 384);
+			return true;
 		} catch (error) {
-			this.logger?.warn(`openai: could not persist refreshed tokens to ${path}: ${error?.message ?? error}`);
+			this.logger?.warn(`openai: could not persist tokens to ${path}: ${error?.message ?? error}`);
+			return false;
 		}
 	}
 	/**
@@ -1600,8 +1619,19 @@ function createLoginController(tokenStore, logger, onAuthChanged, listCatalog, o
 					}
 					const tokens = await exchangeAuthorizationCode(poll.authorizationCode, poll.codeVerifier);
 					const target = tokenStore.writeFilePath();
-					tokenStore.persist(target, authFilePayload(tokens));
+					const saved = tokenStore.persist(target, authFilePayload(tokens));
 					pending = void 0;
+					if (!saved) {
+						// The account granted the tokens but they could not be
+						// written to disk: telling the browser "success" would
+						// leave the UI and the on-disk state out of sync.
+						sendJson(res, 500, {
+							ok: false,
+							code: "persist-failed",
+							message: "credentials were received but could not be saved to disk"
+						});
+						return;
+					}
 					notify();
 					sendJson(res, 200, {
 						status: "success",
@@ -1613,6 +1643,9 @@ function createLoginController(tokenStore, logger, onAuthChanged, listCatalog, o
 					const target = tokenStore.writeFilePath();
 					try {
 						rmSync(target, { force: true });
+						// Drop a leftover refresh lock together with the file:
+						// a stale lock would otherwise delay future refreshes.
+						rmSync(`${target}.lock`, { force: true });
 					} catch {}
 					pending = void 0;
 					notify();
