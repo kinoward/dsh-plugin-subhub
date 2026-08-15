@@ -47,6 +47,17 @@ node plugins/subhub/login.js
 
 支持上传图片:图片先经 harness 附件服务保存,发送时插件从附件服务读出字节、编码为 data URL,作为 Responses API 的 `input_image` 内容块随用户消息一起发出。工具结果里的图片(例如 `read_image` 的返回)同样会编码为 `function_call_output` 输出里的 `input_image` 内容块,模型可以继续"看到"工具读出的图;若后端拒绝这种形式,插件会自动降级为文本占位符并重试一次,不会中断会话。每个模型是否接受图片取自你账户 `/models` 接口的 `input_modalities` 字段(目前除 `gpt-5.3-codex-spark` 纯文本外,各模型都声明 `text,image`);选择不支持图片的模型时,harness 会在发送前拒绝带图消息。
 
+## 图片生成与编辑
+
+插件会在请求里挂载 OpenAI 原生的 `image_generation` 工具(Responses API 服务端工具,由 OpenAI 后端自己执行),因此可以直接在对话里让模型**生成**图片——例如"生成一张二次元美少女微笑的 jpg 图片"。生成的图片以助手消息里的图片块呈现(经 harness 附件服务持久化,可下载),并且会被回放给模型:后续轮次里模型仍能看到自己生成的图。
+
+**编辑图片**:把图片放进对话(上传或上一轮生成的),直接要求模型修改即可——OpenAI 的编辑流程自动把输入里的第一张图作为编辑源,例如"把这张图的背景色改成浅色渐变"。修改后的新图同样以图片块呈现,且会自动进入后续轮次的上下文。
+
+注意事项:
+- 图片生成/编辑能力由你的订阅与后端决定:若后端或所选模型拒绝 `image_generation` 工具,插件会自动停止注入该工具(进程生命周期内)并重试当前请求,不会影响其他功能;重启后重新尝试。
+- 生成的图片必须是 PNG/JPEG/WebP/GIF 之一(附件服务限制);若后端只返回文件引用而无内联字节,插件会以文本提示替代图片块。
+- 可通过 `openai.enableImageTool: false` 关闭该工具注入。
+
 ## 可选设置
 
 在 `$DSH_HOME/settings.yaml` 的 `openai:` 节里可以配置:
@@ -60,11 +71,12 @@ node plugins/subhub/login.js
 | `modelsCacheTtlMs` | `300000` | 模型列表缓存时长(毫秒) |
 | `defaultReasoningEffort` | 空(用模型接口默认) | 默认思考深度:`low`/`medium`/`high`/`xhigh`/`max`/`ultra`;模型不支持的档位会回退到接口默认 |
 | `streamIdleTimeoutMs` | `300000` | 流式响应空闲超时(毫秒) |
+| `enableImageTool` | `true` | 是否在请求里挂载 `image_generation` 工具(对话内生成/编辑图片);后端拒绝时插件会自动停用并重试 |
 | `retryPolicy` | `normal`(重试 2 次) | 请求重试策略 |
 
 ## 限制
 
-- 图片可以出现在用户消息里,也可以出现在工具结果里(编码为 `function_call_output` 的 `input_image` 内容块;后端拒绝时自动降级为文本占位符并重试一次)。助手输出图片仍不支持回放。
+- 图片可以出现在用户消息、工具结果与助手消息里:用户图片编码为 `input_image`;工具结果图片编码为 `function_call_output` 的 `input_image` 内容块;助手产出的图片(图片生成)回放时重定位为用户消息里的 `input_image`。后端拒绝时自动降级为文本占位符并重试一次。
 - `gpt-5.3-codex-spark` 是纯文本模型(账户接口声明的能力),不支持图片输入。
 - 不支持 stop 序列(Responses API 没有这个参数)。
 - 不支持输出 token 上限(后端不接受 `max_output_tokens`,harness 的 `maxTokens` 不会发送)。

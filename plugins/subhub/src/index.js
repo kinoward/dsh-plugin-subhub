@@ -38,18 +38,58 @@ const EFFORT_DISPLAY_NAMES = {
 function flattenText(blocks) {
 	return blocks.filter((block) => block.type === "text").map((block) => block.text).join("");
 }
+/** Sniff the raster format from magic bytes, or undefined when unknown. */
+function detectImageMediaType(data) {
+	if (data.length >= 8 && data[0] === 137 && data[1] === 80 && data[2] === 78 && data[3] === 71) return "image/png";
+	if (data.length >= 3 && data[0] === 255 && data[1] === 216 && data[2] === 255) return "image/jpeg";
+	if (data.length >= 12 && data[0] === 82 && data[1] === 73 && data[2] === 70 && data[3] === 70 && data[8] === 87 && data[9] === 69 && data[10] === 66 && data[11] === 80) return "image/webp";
+	if (data.length >= 6 && data.toString("ascii", 0, 6) === "GIF87a" || data.length >= 6 && data.toString("ascii", 0, 6) === "GIF89a") return "image/gif";
+	return void 0;
+}
+/** Coerce a provider-declared media type into the attachment-store vocabulary. */
+function normalizeImageMediaType(value) {
+	if (typeof value !== "string" || value.length === 0) return void 0;
+	const lower = value.toLowerCase();
+	if (lower === "image/png" || lower === "image/jpeg" || lower === "image/webp" || lower === "image/gif") return lower;
+	if (lower.includes("png")) return "image/png";
+	if (lower.includes("jpeg") || lower.includes("jpg")) return "image/jpeg";
+	if (lower.includes("webp")) return "image/webp";
+	if (lower.includes("gif")) return "image/gif";
+	return void 0;
+}
 /**
- * Reject image blocks that have no wire representation on the OpenAI
- * backend. Assistant-produced images cannot be replayed (OpenAI has no
- * re-sendable form for assistant image output); tool-result images are fine —
- * the Responses API accepts `input_image` parts inside `function_call_output`
- * output, and {@link toolResultContentParts} encodes them that way.
+ * Pull inline base64 image bytes out of a backend image payload. The
+ * Responses API image_generation output arrives in provider-shaped objects
+ * (`b64_json`, a base64 `bytes` string, or a data URL); the exact field set
+ * has changed across backend revisions, so every known carrier is tried.
+ * Returns undefined when the payload carries only a file reference.
  */
-function assertSerializableImages(message) {
-	if (message.role === "assistant") {
-		const images = message.content.filter((block) => block.type === "image");
-		if (images.length > 0) throw new LlmError("The OpenAI backend cannot accept image content in assistant turns.", "UNSUPPORTED_CONTENT");
+function extractGeneratedImage(payload, fallbackMediaType) {
+	if (payload === void 0 || payload === null || typeof payload !== "object") return void 0;
+	let b64;
+	if (typeof payload.b64_json === "string") b64 = payload.b64_json;
+	else if (typeof payload.base64 === "string") b64 = payload.base64;
+	else if (typeof payload.b64 === "string") b64 = payload.b64;
+	else if (typeof payload.bytes === "string" && payload.bytes.length > 0) b64 = payload.bytes;
+	else if (typeof payload.data === "string" && payload.data.startsWith("data:")) {
+		const comma = payload.data.indexOf(",");
+		if (comma > 0) b64 = payload.data.slice(comma + 1);
 	}
+	if (b64 === void 0 || b64 === "") return void 0;
+	let data;
+	try {
+		data = Buffer.from(b64, "base64");
+	} catch {
+		return void 0;
+	}
+	if (data.length === 0) return void 0;
+	const mediaType = detectImageMediaType(data) ?? normalizeImageMediaType(payload.mime_type ?? payload.mediaType ?? payload.media_type ?? fallbackMediaType);
+	if (mediaType === void 0) return void 0;
+	return {
+		data,
+		mediaType,
+		...typeof payload.filename === "string" && payload.filename.length > 0 ? { name: payload.filename } : {}
+	};
 }
 /** Encode one stored attachment as a data URL for the wire. */
 function imageDataUrl(ref, data) {
@@ -135,7 +175,11 @@ function wireReasoningEffort(effort) {
  * parts whose bytes are read from the harness attachment store; tool-result
  * images ride inside the `function_call_output` output parts the same way
  * (results without images keep the plain-string form, so untouched requests
- * stay byte-for-byte identical). The harness `system` field is handled by
+ * stay byte-for-byte identical). Assistant-produced images (the
+ * image_generation tool's output) have no replay form inside assistant
+ * items, so each is re-homed as a user `input_image` part — the model keeps
+ * seeing its own output across turns, and OpenAI's edit flow picks the first
+ * input image as the edit source. The harness `system` field is handled by
  * the caller through `instructions`. Reasoning blocks from history are
  * dropped: OpenAI reasoning is model-internal and cannot be replayed.
  * Assistant turns that produced neither text nor tool calls contribute no
@@ -151,11 +195,11 @@ function wireReasoningEffort(effort) {
 async function serializeInput(messages, attachments, signal, degradeToolResultImages) {
 	const items = [];
 	for (const message of messages) {
-		assertSerializableImages(message);
 		if (message.role === "system") continue;
 		if (message.role === "assistant") {
 			const text = flattenText(message.content);
 			const toolCalls = message.content.filter((block) => block.type === "tool-call");
+			const images = message.content.filter((block) => block.type === "image");
 			if (text.length > 0) items.push({
 				role: "assistant",
 				content: [{ type: "output_text", text }]
@@ -166,6 +210,18 @@ async function serializeInput(messages, attachments, signal, degradeToolResultIm
 				arguments: call.arguments,
 				call_id: call.id
 			});
+			for (const image of images) {
+				const parts = [];
+				if (attachments !== void 0) try {
+					const { ref, data } = await attachments.readImage(image.attachment, signal);
+					parts.push({ type: "input_image", image_url: imageDataUrl(ref, data) });
+				} catch {}
+				if (parts.length === 0) parts.push({ type: "input_text", text: imagePlaceholderText(image.attachment) });
+				items.push({
+					role: "user",
+					content: parts
+				});
+			}
 			continue;
 		}
 		const parts = await imageContentParts(message.content, attachments, signal);
@@ -206,15 +262,21 @@ async function serializeInput(messages, attachments, signal, degradeToolResultIm
  * @param attachments - the harness attachment store, or undefined.
  * @param signal - cancellation for attachment reads.
  * @param degradeToolResultImages - replace tool-result images with text.
+ * @param includeImageTool - append the server-side `image_generation` tool so
+ * the model can generate or edit images directly in the conversation.
  * @returns the Responses API request body.
  */
-async function serializeRequest(options, attachments, signal, degradeToolResultImages) {
+async function serializeRequest(options, attachments, signal, degradeToolResultImages, includeImageTool) {
 	const tools = options.tools?.map((tool) => ({
 		type: "function",
 		name: tool.name,
 		description: tool.description,
 		parameters: tool.parameters
-	}));
+	})) ?? [];
+	// The image_generation tool is executed by the OpenAI backend itself, so
+	// it never becomes a harness tool-call block: translate() converts its
+	// server-side output into assistant image blocks instead.
+	if (includeImageTool) tools.push({ type: "image_generation" });
 	return {
 		model: options.model,
 		stream: true,
@@ -222,7 +284,7 @@ async function serializeRequest(options, attachments, signal, degradeToolResultI
 		store: false,
 		...options.system !== void 0 ? { instructions: options.system } : {},
 		input: await serializeInput(options.messages, attachments, signal, degradeToolResultImages),
-		...tools !== void 0 && tools.length > 0 ? { tools } : {},
+		...tools.length > 0 ? { tools } : {},
 		...options.temperature !== void 0 ? { temperature: options.temperature } : {},
 		...options.reasoningEffort !== void 0 ? { reasoning: { effort: wireReasoningEffort(options.reasoningEffort) } } : {}
 	};
@@ -240,6 +302,17 @@ function indicatesImageToolResultRejection(status, providerError) {
 	if (status !== 400 && status !== 422) return false;
 	const text = [providerError?.code, providerError?.message].filter(Boolean).join(" ").toLowerCase();
 	return /function_call_output|function call output/.test(text) || (/image|input_image/.test(text) && /content|part|output|tool/.test(text));
+}
+/**
+ * Whether a non-OK reply plausibly rejects the `image_generation` tool
+ * itself (unknown/unsupported tool, or a model without image output). Gates
+ * the one-time tool-off retry: afterwards the adapter stops injecting the
+ * tool until the process restarts.
+ */
+function indicatesImageGenerationToolRejection(status, providerError) {
+	if (status !== 400 && status !== 422) return false;
+	const text = [providerError?.code, providerError?.message].filter(Boolean).join(" ").toLowerCase();
+	return /image_generation|image generation/.test(text) || (/image/.test(text) && /unsupported|unknown|invalid|not support/.test(text) && /tool/.test(text));
 }
 /**
  * Read the provider-facing error object from a non-OK Responses API reply.
@@ -288,18 +361,27 @@ function mapUsage(usage) {
  * Consume Responses API SSE payloads and yield harness StreamChunks. One
  * harness block tracks each response output item: message items accumulate
  * `output_text.delta` events, function-call items accumulate
- * `function_call_arguments.delta` events. Usage and finish are deferred to
- * the terminal event (`response.completed` / `response.incomplete` /
+ * `function_call_arguments.delta` events. The server-side `image_generation`
+ * tool is special: its call never becomes a harness tool-call (the backend
+ * executes it itself), and its `function_call_output` / `image` output items
+ * become assistant image blocks persisted through the attachment store, so
+ * the shell renders them like any other image. Usage and finish are deferred
+ * to the terminal event (`response.completed` / `response.incomplete` /
  * `response.failed`); a stream that ends without one is untrusted and throws.
  * @param payloads - SSE data payloads from {@link parseSse}.
+ * @param attachments - the harness attachment store, or undefined.
  * @returns deltas as they arrive; `block-end`s, `usage`, and `finish` last.
  */
-async function* translate(payloads) {
+async function* translate(payloads, attachments) {
 	let nextIndex = 0;
 	const items = /* @__PURE__ */ new Map();
 	const order = [];
 	let pendingFinish;
 	let pendingUsage;
+	/** Item ids of server-side image_generation calls (never tool-call blocks). */
+	const imageGenCalls = /* @__PURE__ */ new Set();
+	/** Output item ids whose image/text content has already been emitted. */
+	const handledImageItems = /* @__PURE__ */ new Set();
 	function open(itemId, kind, itemName, callId) {
 		const block = {
 			index: nextIndex++,
@@ -314,6 +396,106 @@ async function* translate(payloads) {
 		items.set(itemId, block);
 		return block;
 	}
+	/** Emit one closed text block with the given content. */
+	function* textBlock(text) {
+		const index = nextIndex++;
+		order.push({
+			index,
+			kind: "text",
+			closed: true
+		});
+		yield {
+			type: "block-start",
+			index,
+			blockType: "text"
+		};
+		yield {
+			type: "text-delta",
+			index,
+			text
+		};
+		yield {
+			type: "block-end",
+			index,
+			block: {
+				type: "text",
+				text
+			}
+		};
+	}
+	/** Persist generated bytes and emit one closed assistant image block. */
+	async function* imageBlock(extracted) {
+		if (extracted === void 0) {
+			yield* textBlock("[generated image unavailable (no inline bytes)]");
+			return;
+		}
+		try {
+			if (attachments === void 0) throw new Error("attachment store unavailable");
+			const ref = await attachments.saveImage({
+				data: extracted.data,
+				mediaType: extracted.mediaType,
+				...extracted.name !== void 0 ? { name: extracted.name } : {}
+			});
+			const index = nextIndex++;
+			order.push({
+				index,
+				kind: "image",
+				closed: true
+			});
+			yield {
+				type: "block-start",
+				index,
+				blockType: "image"
+			};
+			yield {
+				type: "block-end",
+				index,
+				block: {
+					type: "image",
+					attachment: ref
+				}
+			};
+		} catch (error) {
+			yield* textBlock(`[generated image could not be stored: ${error?.message ?? error}]`);
+		}
+	}
+	/**
+	 * Emit the content of a server-side image_generation result item: text
+	 * parts become text blocks, image parts become assistant image blocks.
+	 * The provider shape varies across backend revisions (a
+	 * `function_call_output` with `output_image`/`image` parts, or a bare
+	 * `image` output item), so every carrier is probed defensively. The item
+	 * is marked handled only after something was actually emitted, because
+	 * the payload may arrive in either `output_item.added` or
+	 * `output_item.done` depending on the backend revision.
+	 */
+	async function* emitImageGenerationOutput(item) {
+		const id = item?.id;
+		if (id !== void 0 && handledImageItems.has(id)) return;
+		let emitted = false;
+		const parts = item?.type === "function_call_output" && Array.isArray(item.output) ? item.output : item?.type === "function_call_output" && typeof item.output === "string" ? [{ type: "input_text", text: item.output }] : [];
+		for (const part of parts) {
+			if (part !== void 0 && part !== null && (part.type === "output_text" || part.type === "input_text") && typeof part.text === "string" && part.text !== "") {
+				yield* textBlock(part.text);
+				emitted = true;
+			}
+		}
+		for (const part of parts) {
+			if (part === void 0 || part === null) continue;
+			if (part.type === "output_image" || part.type === "image") {
+				emitted = true;
+				yield* imageBlock(extractGeneratedImage(part.image ?? part, part.mime_type ?? part.mediaType));
+			} else if (part.type === "input_image") {
+				emitted = true;
+				yield* imageBlock(extractGeneratedImage(part, part.mediaType));
+			}
+		}
+		if (item?.type === "image") {
+			emitted = true;
+			yield* imageBlock(extractGeneratedImage(item.image ?? item, item.mime_type ?? item.mediaType));
+		}
+		if (id !== void 0 && emitted) handledImageItems.add(id);
+	}
 	for await (const payload of payloads) {
 		let event;
 		try {
@@ -325,12 +507,23 @@ async function* translate(payloads) {
 			case "response.output_item.added": {
 				const item = event.item;
 				if (item?.type === "function_call") {
+					// Server-side tool: the backend executes it and streams the
+					// result back in this same response, so it must NOT become
+					// a harness tool-call block.
+					if (item.name === "image_generation") {
+						imageGenCalls.add(item.id);
+						break;
+					}
 					const block = open(item.id, "tool-call", item.name, item.call_id ?? item.id);
 					yield {
 						type: "block-start",
 						index: block.index,
 						blockType: "tool-call"
 					};
+					break;
+				}
+				if (item?.type === "function_call_output" && imageGenCalls.has(item.call_id) || item?.type === "image") {
+					yield* emitImageGenerationOutput(item);
 				}
 				break;
 			}
@@ -355,6 +548,7 @@ async function* translate(payloads) {
 			}
 			case "response.function_call_arguments.delta": {
 				const fragment = event.delta ?? "";
+				if (imageGenCalls.has(event.item_id)) break;
 				let block = items.get(event.item_id);
 				if (block === void 0) {
 					block = open(event.item_id, "tool-call", void 0, event.item_id);
@@ -376,6 +570,11 @@ async function* translate(payloads) {
 			}
 			case "response.output_item.done": {
 				const item = event.item;
+				if (imageGenCalls.has(item?.id)) break;
+				if (item?.type === "function_call_output" && imageGenCalls.has(item.call_id) || item?.type === "image") {
+					yield* emitImageGenerationOutput(item);
+					break;
+				}
 				const block = items.get(item?.id);
 				if (block === void 0 || block.closed) break;
 				block.closed = true;
@@ -895,6 +1094,14 @@ var OpenAIAdapter = class extends LlmAdapter {
 	constructor(config) {
 		super();
 		this.config = config;
+		// "on" until the backend proves it rejects the image_generation tool;
+		// a proven rejection turns it off for the process lifetime.
+		this.imageToolState = "on";
+	}
+	/** Whether the current request should carry the image_generation tool. */
+	includeImageTool() {
+		const config = this.config.options();
+		return this.imageToolState !== "off" && config.enableImageTool !== false;
 	}
 	providerInfo(provider) {
 		return {
@@ -989,16 +1196,23 @@ var OpenAIAdapter = class extends LlmAdapter {
 				throw new LlmError(`OpenAI API request to ${baseURL} failed`, "TRANSPORT", { cause: error });
 			}
 		};
-		let payload = await serializeRequest(options, attachments, signal, false);
+		let payload = await serializeRequest(options, attachments, signal, false, this.includeImageTool());
 		let response = await post(payload);
-		if (!response.ok && hasToolResultImages(options.messages)) {
-			// The backend may refuse `input_image` parts inside a
-			// function_call_output. Retry once with those images degraded to
-			// text placeholders — a tool returning an image must never brick
-			// the conversation.
-			const providerError = await responseProviderError(response);
-			if (indicatesImageToolResultRejection(response.status, providerError)) {
-				payload = await serializeRequest(options, attachments, signal, true);
+		if (!response.ok) {
+			// Bounded self-healing (at most two retries): degrade tool-result
+			// images to text placeholders when the backend rejects them, and
+			// stop injecting the image_generation tool when the backend
+			// rejects it — neither condition may brick the conversation.
+			for (let retry = 0; retry < 2; retry++) {
+				const providerError = await responseProviderError(response);
+				const degradeImages = hasToolResultImages(options.messages) && indicatesImageToolResultRejection(response.status, providerError);
+				const disableImageTool = this.imageToolState !== "off" && indicatesImageGenerationToolRejection(response.status, providerError);
+				if (!degradeImages && !disableImageTool) break;
+				if (disableImageTool) {
+					this.imageToolState = "off";
+					this.config.logger?.warn("openai: backend rejected the image_generation tool; image generation disabled until restart");
+				}
+				payload = await serializeRequest(options, attachments, signal, degradeImages, this.includeImageTool());
 				response = await post(payload);
 			}
 		}
@@ -1015,7 +1229,7 @@ var OpenAIAdapter = class extends LlmAdapter {
 			});
 		}
 		if (!response.body) throw new LlmError("OpenAI API returned no response body", "EMPTY_RESPONSE");
-		yield* translate(parseSse(response.body, onComment));
+		yield* translate(parseSse(response.body, onComment), attachments);
 	}
 };
 //#endregion
@@ -1258,6 +1472,8 @@ const Config = z.object({
 	modelsCacheTtlMs: z.number().min(1).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_MODELS_CACHE_TTL_MS),
 	defaultReasoningEffort: z.union(["low", "medium", "high", "xhigh", "max", "ultra"]),
 	streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
+	// Whether requests may carry the server-side image_generation tool.
+	enableImageTool: z.boolean().default(true),
 	retryPolicy: RetryPolicySchema
 });
 /**
@@ -1282,6 +1498,7 @@ function resolveAdapterOptions(config) {
 		modelsCacheTtlMs,
 		defaultReasoningEffort: config.defaultReasoningEffort,
 		streamIdleTimeoutMs,
+		enableImageTool: config.enableImageTool ?? true,
 		retryPolicy: resolveRetryPolicy(config.retryPolicy, "openai: retryPolicy")
 	};
 }
