@@ -67,7 +67,7 @@ node plugins/subhub/login.js
 - 模型列表完全动态(在线仅显示账户 /models 接口返回的模型,离线才用内置备用列表);
 - 鉴权文件权限应为 0600、不要提交进 git;token 不会打印到日志或终端,也不会经过登录 API 回传浏览器。
 
-## 客户端半边:已知坑与验证(会话复盘沉淀)
+## 客户端半边:开发要点与验证
 
 - **两层 inject 方向不能反**(见上节):`dsh.client.inject` 填 npm 包名,`src/client.js` 的 `inject` 填 Cordis 服务名;填反任何一处,web 启动会停在"等待服务"报错页。
 - **UI 文字跟随语言设置**:客户端用 `ctx.locale.register(ns, {zh, en})` 提供词典、`bind(ns)` 取翻译函数、`subscribe` 随语言切换重渲染;宿主侧的用户可见名称(如「模型」页目录里的提供商名)不能写死——客户端把 locale 快照(`ctx.locale.getSnapshot().active`,即 harness 当前界面语言)作为 `locale` 查询参数随登录 API 轮询带给宿主,宿主据此用目录条目的 `replace()` 原子换名;用户显式选择语言时以设置为准(宿主读 `settings.get("locale")?.preference`),`Accept-Language` 仅作非浏览器调用者的兜底。模型 ID、档位名、简介等来自账户接口的元数据保持原样、不做翻译。

@@ -10,6 +10,7 @@ Kino 的 DeepSeek Harness 插件集合:**唯一仓库,即一个可安装的组�
 kino-ds-harness-plugin/
 ├── AGENTS.md             # AI 编程代理的行为规范
 ├── README.md             # 本文:项目介绍与快速使用
+├── LICENSE               # MIT 许可文本
 ├── docs/
 │   └── development.md    # 开发、验证、分发指南
 ├── package.json          # 唯一清单:依赖 + exports 插件子路径 + dsh.bundle.patch
@@ -33,6 +34,8 @@ kino-ds-harness-plugin/
 
 ## 快速使用
 
+GitHub 仓库:https://github.com/kinoward/kino-ds-harness-plugin
+
 ```sh
 # 安装整个集合(首次会自动初始化 profile)
 dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin
@@ -55,4 +58,5 @@ dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin
 ## 进一步阅读
 
 - 开发循环、验证清单、新增插件与分发:见 [`docs/development.md`](docs/development.md);
+- 问题与反馈:到仓库的 [Issues](https://github.com/kinoward/kino-ds-harness-plugin/issues) 提出;
 - AI 编程代理的约束(含提交规范):见 [`AGENTS.md`](AGENTS.md)。
