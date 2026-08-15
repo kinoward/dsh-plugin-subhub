@@ -1173,6 +1173,39 @@ function applyImageGenerationDirective(options) {
 	return system === options.system ? options : { ...options, system };
 }
 /**
+ * Tool-result images that the conversation UI has not shown yet. The shell's
+ * tool-result cards render text only and drop image blocks, so an image a
+ * tool returned (generate_image, read_image) is visible to the model but not
+ * to the user. The adapter echoes those images into the next assistant
+ * message — whose renderer does display images — tracking what has already
+ * been echoed through the attachment ids present in assistant history.
+ * @param messages - the harness conversation, in order.
+ * @returns attachment refs (from the most recent tool result that still has
+ * an un-echoed image), in block order.
+ */
+function lastUnEchoedToolResultImages(messages) {
+	const echoed = new Set();
+	for (const message of messages ?? []) {
+		if (message.role !== "assistant") continue;
+		for (const block of message.content ?? []) {
+			if (block.type === "image" && block.attachment?.attachmentId !== void 0) echoed.add(block.attachment.attachmentId);
+		}
+	}
+	for (let i = (messages ?? []).length - 1; i >= 0; i--) {
+		const message = messages[i];
+		if (message.role === "assistant" || message.role === "system") continue;
+		const refs = [];
+		for (const block of message.content ?? []) {
+			if (block.type !== "tool-result") continue;
+			for (const part of block.content ?? []) {
+				if (part.type === "image" && part.attachment?.attachmentId !== void 0 && !echoed.has(part.attachment.attachmentId)) refs.push(part.attachment);
+			}
+		}
+		if (refs.length > 0) return refs;
+	}
+	return [];
+}
+/**
  * `OpenAIAdapter`: fetch + SSE against the OpenAI backend's Responses API,
  * emitting harness StreamChunks. Connection facts and the bearer token are
  * resolved once per operation, so auth rotation reaches the very next
@@ -1250,6 +1283,30 @@ var OpenAIAdapter = class extends LlmAdapter {
 		// that mode), so it rides the wire in API-key mode only.
 		const includeWireImageTool = auth.mode === "apikey" && this.includeImageTool();
 		const imageDispatch = includeWireImageTool ? applyImageGenerationDirective(dispatch) : dispatch;
+		// The shell renders tool-result cards as text only, so images a tool
+		// returned (generate_image, read_image) never reach the user's eyes
+		// through the card. Echo un-echoed tool-result images as leading
+		// assistant image blocks, which the conversation renderer displays.
+		// Skipped for tool-less calls (the session-title request) so a title
+		// stream never carries an image. The echoed blocks occupy the first
+		// indexes; the model stream is re-indexed past them.
+		const echoRefs = Array.isArray(options.tools) && options.tools.length > 0 ? lastUnEchoedToolResultImages(options.messages) : [];
+		const echoOffset = echoRefs.length;
+		for (let index = 0; index < echoRefs.length; index++) {
+			yield {
+				type: "block-start",
+				index,
+				blockType: "image"
+			};
+			yield {
+				type: "block-end",
+				index,
+				block: {
+					type: "image",
+					attachment: echoRefs[index]
+				}
+			};
+		}
 		const consumer = new AbortController();
 		const watchdog = idleWatchdog(options.signal === void 0 ? consumer.signal : AbortSignal.any([options.signal, consumer.signal]), connection.streamIdleTimeoutMs, "LLM_STREAM_IDLE_TIMEOUT");
 		const iterator = this.request(imageDispatch, watchdog.signal, baseURL, auth, () => {
@@ -1263,7 +1320,8 @@ var OpenAIAdapter = class extends LlmAdapter {
 					exhausted = true;
 					return;
 				}
-				yield result.value;
+				const chunk = result.value;
+				yield echoOffset > 0 && typeof chunk.index === "number" ? { ...chunk, index: chunk.index + echoOffset } : chunk;
 			}
 		} catch (error) {
 			if (timeoutOf(watchdog.signal, "LLM_STREAM_IDLE_TIMEOUT") !== void 0) throw new LlmError(`OpenAI stream idle timeout after ${connection.streamIdleTimeoutMs}ms`, "TIMEOUT", { cause: error });
