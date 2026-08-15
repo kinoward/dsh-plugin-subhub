@@ -85,8 +85,8 @@ node plugins/subhub/login.js
 ## 分发(单一仓库直装)
 
 ```sh
-# 一律锁定到具体 commit(`<sha>` 取仓库提交记录里的任一 commit)
-dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin#<sha>
+# 安装(`--profile <name>` 必填、名字任意)
+dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin
 ```
 
-更新时把 `#<sha>` 换成新 commit 再执行一次。想只启用部分插件:在自身 profile 的 `cordis.patch.yml` 中按 `id` 禁用对应行(用户层在所有 bundle 层之后应用、按 id 胜出)。
+更新时再次执行上面的命令。想只启用部分插件:在自身 profile 的 `cordis.patch.yml` 中按 `id` 禁用对应行(用户层在所有 bundle 层之后应用、按 id 胜出)。

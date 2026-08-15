@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Kino 的 DeepSeek Harness 插件集合:**唯一仓库,即一个可安装的组合包(bundle)**,内含多个插件。仅通过本 GitHub 仓库直装使用;不上 npm、不拆仓库。
+Kino 的 DeepSeek Harness 插件集合:**唯一仓库,即一个可安装的组合包(bundle)**。当前提供 kino-subhub 一个插件,后续插件在同仓库内扩展。仅通过本 GitHub 仓库直装使用;不上 npm、不拆仓库。
 
 GitHub 仓库:https://github.com/kinoward/kino-ds-harness-plugin
 
@@ -12,8 +12,8 @@ GitHub 仓库:https://github.com/kinoward/kino-ds-harness-plugin
 
 ```sh
 # 安装:`--profile` 为必填参数,名字任意;用 web 时可直接 `dsh web` 启动
-# (一律锁定到具体 commit,保证版本可复现、不受上游变动影响;首次会自动初始化 profile)
-dsh plugin --profile web add github:kinoward/kino-ds-harness-plugin#<sha>
+# (首次会自动初始化 profile)
+dsh plugin --profile web add github:kinoward/kino-ds-harness-plugin
 
 # 启动(profile 名为 web 时也可直接 dsh web)
 dsh --profile web
@@ -32,11 +32,11 @@ dsh --profile web
 要求:已安装 `dsh` CLI;使用随包脚本登录时需要 Node.js 18+。纯 JavaScript、无构建步骤,安装时无需授予构建权限。
 
 ```sh
-# 安装(`--profile <name>` 必填、名字任意;锁定到具体 commit,`<sha>` 取仓库提交记录里的任一 commit)
-dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin#<sha>
+# 安装(`--profile <name>` 必填、名字任意)
+dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin
 ```
 
-更新:把 `#<sha>` 换成新 commit,再执行一次上面的命令。
+更新:再次执行上面的安装命令即可。
 
 安装后,可在界面 **设置 → 插件 → 插件列表** 里按行启用/停用插件;命令行方式则是按上例在 profile 的 `cordis.patch.yml` 中禁用对应行。
 
