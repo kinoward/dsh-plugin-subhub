@@ -1,5 +1,7 @@
 # kino-ds-harness-plugin
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Kino 的 DeepSeek Harness 插件集合:**唯一仓库,即一个可安装的组合包(bundle)**,内含多个插件。仅通过本 GitHub 仓库直装使用;不上 npm、不拆仓库。
 
 ## 目录结构
@@ -45,6 +47,10 @@ dsh plugin --profile <name> add github:kinoward/kino-ds-harness-plugin
 ```
 
 纯 JavaScript、无构建步骤,用户无需为 git 依赖授予构建权限;建议安装时锁定 commit(`github:kinoward/kino-ds-harness-plugin#<sha>`)。
+
+## 许可
+
+本仓库采用 [MIT License](LICENSE):学习、修改、商用均自由。唯一要求:以任何形式**分发**本软件(包括随商业产品分发、二次封装)时,必须保留版权声明与 MIT 许可文本——即商用分发时注明出处(引用说明)。个人或企业内部使用不附带此义务。
 
 ## 进一步阅读
 
