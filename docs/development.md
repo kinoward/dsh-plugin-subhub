@@ -70,7 +70,7 @@ node plugins/subhub/login.js
 ## 客户端半边:已知坑与验证(会话复盘沉淀)
 
 - **两层 inject 方向不能反**(见上节):`dsh.client.inject` 填 npm 包名,`src/client.js` 的 `inject` 填 Cordis 服务名;填反任何一处,web 启动会停在"等待服务"报错页。
-- **UI 文字跟随语言设置**:客户端用 `ctx.locale.register(ns, {zh, en})` 提供词典、`bind(ns)` 取翻译函数、`subscribe` 随语言切换重渲染;宿主侧的用户可见名称(如「模型」页目录里的提供商名)不能写死——从 `settings.get("locale")?.preference` 读语言偏好(未设置回落中文,与外壳一致),并监听 `settings/updated`(ns 为 `locale`)时用目录条目的 `replace()` 原子换名。模型 ID、档位名、简介等来自账户接口的元数据保持原样、不做翻译。
+- **UI 文字跟随语言设置**:客户端用 `ctx.locale.register(ns, {zh, en})` 提供词典、`bind(ns)` 取翻译函数、`subscribe` 随语言切换重渲染;宿主侧的用户可见名称(如「模型」页目录里的提供商名)不能写死——客户端把 locale 快照(`ctx.locale.getSnapshot().active`,即 harness 当前界面语言)作为 `locale` 查询参数随登录 API 轮询带给宿主,宿主据此用目录条目的 `replace()` 原子换名;用户显式选择语言时以设置为准(宿主读 `settings.get("locale")?.preference`),`Accept-Language` 仅作非浏览器调用者的兜底。模型 ID、档位名、简介等来自账户接口的元数据保持原样、不做翻译。
 - **往外壳 React 树里注入内容**:外壳页面是构建产物的 React 树,不提供渲染接口;用 `MutationObserver`(childList+subtree,挂在 `document.body`)+ `queueMicrotask` 扫描目标行,用纯 DOM 构建节点。暖缓存同步渲染可以避免展开闪烁;重复扫描要幂等(挂载容器 `childNodes.length === 0` 才重建)。
 - **外壳运行时不等于类型声明**:`useCopyFeedback` 只在类型声明里,运行时没有导出;实际可用的是 `writeClipboard`(以及 `Button`/`Modal`/`StateDot`/若干图标)。以运行时导出为准,先验证再解构。
 - **Web UI 改动建议无头浏览器验证**:临时 `DSH_HOME` + 复制 profile 的 `package.json` 与 `pnpm-workspace.yaml` + `pnpm install --prefer-offline`,起 `dsh --profile web --port <新端口>`,用 Playwright chromium 驱动:跳过首次引导 → 设置 → 目标页面,断言文案与行为;结束后清理临时目录。

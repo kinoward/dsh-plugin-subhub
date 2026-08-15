@@ -938,6 +938,33 @@ function isTrustedRequest(req) {
 	}
 	return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
 }
+/**
+ * Map a request's Accept-Language header to a zh/en hint. The hub page polls
+ * these routes with the browser's own language, which is exactly what the
+ * shell's locale service falls back to before the user picks one explicitly.
+ */
+function languageHint(req) {
+	const header = req.headers["accept-language"];
+	if (typeof header !== "string" || header.length === 0) return void 0;
+	const first = header.split(",")[0].trim().toLowerCase();
+	if (first.startsWith("zh")) return "zh";
+	if (first.startsWith("en")) return "en";
+	return void 0;
+}
+/**
+ * The client carries the active harness UI language (locale snapshot) as a
+ * `locale` query parameter on every plugin API call; this is the authoritative
+ * hint — the exact language the shell renders in. Accept-Language only backs
+ * it up for non-browser callers (e.g. curl diagnostics).
+ */
+function localeFromParam(url) {
+	const value = url.searchParams.get("locale");
+	if (typeof value !== "string") return void 0;
+	const tag = value.trim().toLowerCase();
+	if (tag.startsWith("en")) return "en";
+	if (tag.startsWith("zh")) return "zh";
+	return void 0;
+}
 /** Read a small JSON body, rejecting oversized or malformed input. */
 function readJsonBody(req) {
 	return new Promise((resolve, reject) => {
@@ -979,14 +1006,21 @@ function sendJson(res, status, payload) {
  * subscriptions page's login API. Token values never cross the wire: the
  * browser only ever sees the public verification URL / one-time code and
  * plain status results. `onAuthChanged` runs after every login/logout so the
- * owning plugin can (un)register the provider route. `listCatalog` answers
- * the read-only model catalog route for the Models page card.
+ * owning plugin can (un)register the provider route. `onLanguageHint` runs
+ * when a request reveals the harness UI language — the client's explicit
+ * `locale` query parameter first, Accept-Language as a fallback — so the
+ * provider display name can follow the shell language until the user picks
+ * one explicitly.
+ * `listCatalog` answers the read-only model catalog route for the Models
+ * page card.
  */
-function createLoginController(tokenStore, logger, onAuthChanged, listCatalog) {
+function createLoginController(tokenStore, logger, onAuthChanged, listCatalog, onLanguageHint) {
 	let pending;
 	// Last login state observed by the status route; drives the polling
 	// self-heal below.
 	let lastLoggedIn = false;
+	// Last language hint observed from requests.
+	let lastLanguageHint;
 	const notify = () => {
 		try {
 			onAuthChanged?.();
@@ -1007,6 +1041,13 @@ function createLoginController(tokenStore, logger, onAuthChanged, listCatalog) {
 			}
 			const url = new URL(req.url ?? "/", "http://localhost");
 			const path = url.pathname;
+			const hint = localeFromParam(url) ?? languageHint(req);
+			if (hint !== void 0 && hint !== lastLanguageHint) {
+				lastLanguageHint = hint;
+				try {
+					onLanguageHint?.(hint);
+				} catch {}
+			}
 			try {
 				if (path === `${LOGIN_API_PATH}/login/status` && req.method === "GET") {
 					const loggedIn = tokenStore.hasTokens();
@@ -1184,10 +1225,11 @@ function apply(ctx, config) {
 	ctx.inject(["attachments"], (attachmentCtx) => {
 		attachments = attachmentCtx.attachments;
 	});
-	// Provider display name follows the harness language preference the same
-	// way the client dictionaries do: the locale plugin persists an explicit
-	// choice in the `locale` settings namespace, and unset falls back to
-	// Chinese, matching the locale service's zh fallback.
+	// Provider display name follows the harness language: an explicit choice
+	// in the `locale` settings namespace wins; until the user picks one, the
+	// shell follows the browser language, which the host learns from the
+	// Accept-Language header of the hub page's API calls (see onLanguageHint
+	// below). Unset with no hint falls back to Chinese.
 	const localePreference = () => {
 		const settings = ctx.get("settings");
 		if (settings === void 0) return void 0;
@@ -1195,7 +1237,8 @@ function apply(ctx, config) {
 		const preference = locale !== null && typeof locale === "object" ? locale.preference : void 0;
 		return typeof preference === "string" && preference.length > 0 ? preference : void 0;
 	};
-	const providerDisplayName = () => localePreference() === "en" ? "OpenAI subscription" : "OpenAI 订阅";
+	let inferredLocale;
+	const providerDisplayName = () => (localePreference() ?? inferredLocale) === "en" ? "OpenAI subscription" : "OpenAI 订阅";
 	const adapter = new OpenAIAdapter({
 		options,
 		tokenStore,
@@ -1274,7 +1317,10 @@ function apply(ctx, config) {
 	// subscriptions page drives the device-code flow through these routes.
 	// The webserver service can mount after this row, so the route rides its
 	// own inject scope and appears whenever the service does.
-	const login = createLoginController(tokenStore, ctx.logger, syncRegistration, () => adapter.listModels(PROVIDER));
+	const login = createLoginController(tokenStore, ctx.logger, syncRegistration, () => adapter.listModels(PROVIDER), (lang) => {
+		inferredLocale = lang;
+		syncDisplayName();
+	});
 	ctx.inject(["webServer"], (webCtx) => {
 		webCtx.effect(() => webCtx.webServer.register({
 			kind: "prefix",

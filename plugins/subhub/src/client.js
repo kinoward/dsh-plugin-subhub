@@ -32,6 +32,11 @@ window.__ModuleLoader__.load({
 		const POLL_MS = 2500;
 		const NS = "settings.subscriptions";
 		const h = React.createElement;
+		// Active harness UI language, refreshed from the locale snapshot; every
+		// host API call carries it so the host can keep the provider display
+		// name in the same language as the shell (explicit setting or shell
+		// fallback — whatever the snapshot resolved to).
+		let uiLocale = "zh";
 		/** Simplified Chinese dictionary (the key-set source of truth). */
 		const zh = {
 			nav: "第三方订阅",
@@ -189,7 +194,8 @@ window.__ModuleLoader__.load({
 		}
 		/** Same-origin JSON call to the host plugin's login API. */
 		async function api(path, options = {}) {
-			const response = await fetch(`${API}${path}`, {
+			const sep = path.includes("?") ? "&" : "?";
+			const response = await fetch(`${API}${path}${sep}locale=${encodeURIComponent(uiLocale)}`, {
 				...options,
 				headers: {
 					"content-type": "application/json",
@@ -798,6 +804,14 @@ window.__ModuleLoader__.load({
 			ctx.effect(() => ctx.locale.register(NS, { zh, en }), "kino-subhub: subscription dictionaries");
 			const t = ctx.locale.bind(NS);
 			const subscribeLocale = (listener) => ctx.locale.subscribe(listener);
+			const syncUiLocale = () => {
+				const snapshot = ctx.locale.getSnapshot();
+				if (snapshot !== null && typeof snapshot === "object" && typeof snapshot.active === "string" && snapshot.active.length > 0) {
+					uiLocale = snapshot.active;
+				}
+			};
+			syncUiLocale();
+			ctx.effect(() => ctx.locale.subscribe(syncUiLocale), "kino-subhub: locale snapshot");
 			ctx.effect(() => installModelCatalogAugmentation(ctx, t), "kino-subhub: models page augmentation");
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
 				name: "settings.section",
