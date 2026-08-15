@@ -1754,38 +1754,65 @@ function latestConversationImageRef(session) {
 	return void 0;
 }
 /**
- * Ask the account backend to EDIT one source image: multipart POST against
- * the backend's Images edits route — `…/backend-api/codex/images/edits` with
- * ChatGPT OAuth, `api.openai.com/v1/images/edits` with an API key — carrying
- * the source bytes and the change prompt.
+ * Ask the account backend to EDIT one source image. The chatgpt endpoint
+ * rejects multipart on its edit route ("Unsupported content type"), so the
+ * request walks a candidate chain and records every rejection: JSON with a
+ * data-URL `image`, JSON with a raw base64 `image`, then multipart. The
+ * public API (API-key mode) keeps the documented multipart form first. The
+ * first attempt that returns inline image bytes wins.
  */
-async function requestEditedImage(tokenStore, config, auth, sourceRef, sourceData, prompt, size, quality, signal) {
+async function requestEditedImage(tokenStore, config, auth, sourceRef, sourceData, prompt, size, quality, signal, debug) {
 	const model = typeof config.imageModel === "string" && config.imageModel.length > 0 ? config.imageModel : DEFAULT_IMAGE_MODEL;
 	const headers = tokenStore.authHeaders(auth.token, auth.accountId);
-	const form = new FormData();
-	form.set("model", model);
-	form.set("prompt", prompt);
-	form.set("image", new Blob([sourceData], { type: sourceRef.mediaType ?? "image/png" }), sourceRef.name ?? "source.png");
-	if (size !== void 0) form.set("size", size);
-	if (quality !== void 0) form.set("quality", quality);
-	const url = `${auth.mode === "apikey" ? config.apiBaseURL ?? OPENAI_API_BASE_URL : config.baseURL ?? CHATGPT_BACKEND_BASE_URL}/images/edits`;
-	const response = await fetch(url, {
-		method: "POST",
-		headers,
-		body: form,
-		signal
-	});
-	if (!response.ok) {
-		const detail = (await response.text().catch(() => "")).slice(0, 200);
-		throw new Error(`image edit endpoint failed (HTTP ${response.status})${detail.length > 0 ? `: ${detail}` : ""}`);
-	}
-	const payload = await response.json();
-	const extracted = await imageBytesFromPayload(payload, headers, signal);
-	if (extracted === void 0) throw new Error(`image edit endpoint ${url} returned no inline image bytes`);
-	return {
-		...extracted,
-		name: `edited-${Date.now()}.${extracted.mediaType === "image/jpeg" ? "jpg" : extracted.mediaType.split("/")[1] ?? "png"}`
+	const mediaType = sourceRef.mediaType ?? "image/png";
+	const base64 = Buffer.from(sourceData.buffer, sourceData.byteOffset, sourceData.byteLength).toString("base64");
+	const dataUrl = `data:${mediaType};base64,${base64}`;
+	const extras = { ...size !== void 0 ? { size } : {}, ...quality !== void 0 ? { quality } : {} };
+	const base = auth.mode === "apikey" ? config.apiBaseURL ?? OPENAI_API_BASE_URL : config.baseURL ?? CHATGPT_BACKEND_BASE_URL;
+	const url = `${base}/images/edits`;
+	const buildMultipart = () => {
+		const form = new FormData();
+		form.set("model", model);
+		form.set("prompt", prompt);
+		form.set("image", new Blob([sourceData], { type: mediaType }), sourceRef.name ?? "source.png");
+		if (size !== void 0) form.set("size", size);
+		if (quality !== void 0) form.set("quality", quality);
+		return form;
 	};
+	const jsonAttempts = [{
+		body: { model, prompt, image: dataUrl, ...extras }
+	}, {
+		body: { model, prompt, image: base64, ...extras }
+	}];
+	const attempts = auth.mode === "apikey" ? [{ kind: "multipart" }, ...jsonAttempts.map((attempt) => ({ kind: "json", body: attempt.body }))] : [...jsonAttempts.map((attempt) => ({ kind: "json", body: attempt.body })), { kind: "multipart" }];
+	let lastError;
+	for (let index = 0; index < attempts.length; index++) {
+		const attempt = attempts[index];
+		try {
+			const response = await fetch(url, {
+				method: "POST",
+				headers: attempt.kind === "json" ? { "content-type": "application/json", ...headers } : headers,
+				body: attempt.kind === "json" ? JSON.stringify(attempt.body) : buildMultipart(),
+				signal
+			});
+			if (!response.ok) {
+				const detail = (await response.text().catch(() => "")).slice(0, 200);
+				throw new Error(`HTTP ${response.status}${detail.length > 0 ? `: ${detail}` : ""}`);
+			}
+			const payload = await response.json();
+			const extracted = await imageBytesFromPayload(payload, headers, signal);
+			if (extracted === void 0) throw new Error("no inline image bytes in response");
+			return {
+				...extracted,
+				name: `edited-${Date.now()}.${extracted.mediaType === "image/jpeg" ? "jpg" : extracted.mediaType.split("/")[1] ?? "png"}`
+			};
+		} catch (error) {
+			lastError = error;
+			debug?.(`image edit attempt ${index + 1}/${attempts.length} (${attempt.kind}) failed: ${error?.message ?? error}`);
+			if (signal?.aborted) throw error;
+		}
+	}
+	throw lastError ?? new Error("image edit endpoint unavailable");
 }
 /**
  * Build the `generate_image` harness tool. Unlike the wire-level
@@ -1796,7 +1823,7 @@ async function requestEditedImage(tokenStore, config, auth, sourceRef, sourceDat
  * uses, so the conversation UI renders it and the adapter replays it as an
  * input_image part on later turns.
  */
-function generateImageToolDefinition(tokenStore, config, resolveAttachments) {
+function generateImageToolDefinition(tokenStore, config, resolveAttachments, resolveDebugPath) {
 	return defineTool({
 		name: IMAGE_TOOL_NAME,
 		description: "Generate or edit an image with the connected ChatGPT/OpenAI account (gpt-image model). Call this whenever the user asks to generate, draw, create, or design an image; to EDIT an existing image (change colors, style, or details while keeping the rest), set edit_latest_image to true — the tool then uses the most recent image already in the conversation as the source. The image is returned as part of this tool's result — never claim an image was generated or edited unless this tool actually returned one.",
@@ -1859,7 +1886,10 @@ function generateImageToolDefinition(tokenStore, config, resolveAttachments) {
 				const sourceRef = latestConversationImageRef(exec.agent?.session);
 				if (sourceRef === void 0) throw new Error("edit_latest_image was requested but the conversation carries no image yet; ask the user to upload an image first, or generate one");
 				const source = await store.readImage(sourceRef, exec.signal);
-				extracted = await requestEditedImage(tokenStore, options, auth, sourceRef, source.data, prompt, args.size, args.quality, exec.signal);
+				const debugPath = resolveDebugPath?.();
+				extracted = await requestEditedImage(tokenStore, options, auth, sourceRef, source.data, prompt, args.size, args.quality, exec.signal, (message) => {
+					if (debugPath !== void 0) appendImageDebug(debugPath, message);
+				});
 			} else {
 				extracted = await requestGeneratedImage(tokenStore, options, auth, prompt, args.size, args.quality, exec.signal);
 			}
@@ -1999,7 +2029,7 @@ function apply(ctx, config) {
 	const syncImageTool = () => {
 		const shouldRegister = tokenStore.hasTokens();
 		if (shouldRegister && toolsService !== void 0) {
-			if (unregisterImageTool === void 0) unregisterImageTool = toolsService.register(generateImageToolDefinition(tokenStore, options, () => attachments ?? ctx.get("attachments")));
+			if (unregisterImageTool === void 0) unregisterImageTool = toolsService.register(generateImageToolDefinition(tokenStore, options, () => attachments ?? ctx.get("attachments"), () => adapter.imageDebugLogPath()));
 		} else if (!shouldRegister && unregisterImageTool !== void 0) {
 			unregisterImageTool();
 			unregisterImageTool = void 0;
