@@ -58,11 +58,14 @@ AGENTS.md                       AI 约束与本文地图(先读)
 README.md                       人类:英文主文档:定位、安装、快速开始、命令行登录、界面预览、安全与隐私、支持、许可
 README.zh.md                    人类:中文镜像,与 README.md 结构同步
 LICENSE                         MIT 许可文本(条款不可改写)
+CHANGELOG.md                    人类:版本变更记录(Keep a Changelog 风格,条目带 commit 短哈希)
+VERSION                         维护:当前发布版本(vX.Y.Z,与 CHANGELOG.md 最新节、package.json version 三者一致)
 docs/development.md             人类:开发循环、验证、分发
-assets/                         人类:README 使用的横幅与截图素材(hero-en.svg / hero-zh.svg / settings-*.png / models-*.png;截图已对绝对路径打码)
+assets/                         人类:README 使用的横幅与截图素材(hero-en.svg / hero-zh.svg / hero-en.png / og-image.png 社交预览图 / settings-*.png / models-*.png;截图已对绝对路径打码)
 package.json                    唯一清单:dsh.bundle.patch、exports、dsh.client、依赖
 cordis.patch.yml                补丁层:本插件一行(id 与 name 均为 dsh-plugin-subhub)
 login.js                        随包登录脚本(README「命令行登录」小节)
+scripts/demo-gif.mjs            维护:演示 GIF 采集脚本(Playwright 截图 + ffmpeg 合成,产物不入库)
 src/index.js                    插件代码(宿主半边:LLM 适配器与登录 API)
 src/client.js                   客户端半边:「第三方订阅」中心页(手写模块加载器格式)
 src/device-flow.js              共享的 OpenAI 设备码登录流程
