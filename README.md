@@ -12,6 +12,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Node.js-%3E%3D18.17-339933?logo=nodedotjs&logoColor=white" alt="Node.js >= 18.17" /></a>
   <img src="https://img.shields.io/badge/DSH-Web%20profile-5B4CF0" alt="DSH Web profile" />
+  <a href="https://github.com/zp-home/dsh-recommend"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fzp-home%2Fdsh-recommend%2Fmain%2Fdata%2Fbadges%2Fkinoward__dsh-plugin-subhub.certified.json" alt="dsh-recommend · certified" /></a>
 </p>
 
 Bring a **third-party subscription account** into [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and chat with the models your subscription covers: text chat, image understanding, image generation, and image editing.
