@@ -1,8 +1,8 @@
-# dsh-plugin-subhub
-
 <p align="center">
   <img src="assets/hero.svg" width="100%" alt="dsh-plugin-subhub — third-party subscription accounts inside DeepSeek Harness" />
 </p>
+
+<h1 align="center">Dsh Plugin Subhub</h1>
 
 <p align="center">
   English · <a href="README.zh.md">中文</a>
