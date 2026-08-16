@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-subhub",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "DeepSeek Harness 第三方订阅接入插件:登录第三方订阅账户即可使用订阅内的模型(当前支持 OpenAI / ChatGPT 订阅,更多订阅服务规划中;支持图片理解与对话内图片生成、编辑)",
   "type": "module",
   "main": "./src/index.js",
