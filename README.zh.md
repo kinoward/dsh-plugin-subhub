@@ -16,7 +16,7 @@
 
 把**第三方订阅账户**接入 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，使用订阅覆盖的模型进行对话：文字对话、图片理解、图片生成与图片编辑。
 
-**目前支持 OpenAI / ChatGPT 订阅，更多订阅服务即将接入。**
+**目前仅支持 OpenAI（ChatGPT）订阅，更多订阅服务规划中。**
 
 > 可用模型、使用额度和响应速度由订阅服务商及你的账户决定。服务商调整服务后，部分功能可能暂时不可用。
 
@@ -34,7 +34,7 @@ dsh web
 ## 快速开始
 
 1. **登录** —— 打开 **设置 → 第三方订阅**，在 **OpenAI 订阅** 卡片上点击「登录」，在浏览器中打开授权链接并输入一次性码（码 15 分钟内有效）。完成授权后页面会自动同步，订阅随即出现在模型选择器中。
-2. **选择模型** —— 点击输入框左下角的模型选择器（显示当前模型与推理等级），点「模型」，在 **OpenAI 订阅** 分组下选择想用的 GPT 模型；需要时可在同一菜单中调整推理等级。可用模型与推理等级随账户自动同步显示。
+2. **选择模型** —— 点击输入框左下角的模型选择器（显示当前模型与推理等级），点「模型」，在 **OpenAI 订阅** 分组下选择想用的模型；需要时可在同一菜单中调整推理等级。可用模型与推理等级随账户自动同步显示。
 3. **使用图片** —— 上传图片并提问、描述画面生成图片，或要求编辑图片：
 
    - 查看：*“这张图片里有什么？”* / *“帮我提取图片中的文字。”*
@@ -84,21 +84,21 @@ node node_modules/dsh-plugin-subhub/login.js
   <img src="assets/models-zh-dark.png" width="46%" alt="模型页 — OpenAI 订阅展开（深色）" />
 </p>
 
-**对话中使用图片（图片理解，GPT-5.6-Sol · High）**：
+**对话中使用图片（图片理解）**：
 
 <p align="center">
   <img src="assets/chat-image-zh-light.png" width="46%" alt="对话中使用图片（浅色）" />
   <img src="assets/chat-image-zh-dark.png" width="46%" alt="对话中使用图片（深色）" />
 </p>
 
-**对话中生成图片（文生图，GPT-5.6-Sol · High）**：
+**对话中生成图片（文生图）**：
 
 <p align="center">
   <img src="assets/chat-generate-zh-light.png" width="46%" alt="对话中生成图片（浅色）" />
   <img src="assets/chat-generate-zh-dark.png" width="46%" alt="对话中生成图片（深色）" />
 </p>
 
-**对话中编辑图片（图生图，GPT-5.6-Sol · High）**：
+**对话中编辑图片（图生图）**：
 
 <p align="center">
   <img src="assets/chat-edit-zh-light.png" width="46%" alt="对话中编辑图片（浅色）" />

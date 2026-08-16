@@ -16,7 +16,7 @@
 
 Bring a **third-party subscription account** into [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and chat with the models your subscription covers: text chat, image understanding, image generation, and image editing.
 
-**OpenAI / ChatGPT subscriptions are supported today; more subscription services are planned.**
+**Only OpenAI / ChatGPT subscriptions are supported today; more subscription services are planned.**
 
 > Model availability, usage limits, and response speed are decided by the subscription provider and your account. Some features may become temporarily unavailable after the provider changes its service.
 
@@ -34,7 +34,7 @@ dsh web
 ## Quick start
 
 1. **Log in** — open **Settings → Third-party subscriptions**, click **Sign in** on the **OpenAI subscription** card, then open the authorization link in a browser and enter the one-time code (valid for 15 minutes). Once authorized, the page syncs automatically and the subscription appears in the model picker.
-2. **Pick a model** — click the model selector at the bottom-left of the input area (it shows the current model and reasoning level), choose **Model**, and pick a GPT model under **OpenAI subscription**. Adjust the reasoning level from the same menu if needed. Available models and reasoning levels come from your account and stay in sync automatically.
+2. **Pick a model** — click the model selector at the bottom-left of the input area (it shows the current model and reasoning level), choose **Model**, and pick a model under **OpenAI subscription**. Adjust the reasoning level from the same menu if needed. Available models and reasoning levels come from your account and stay in sync automatically.
 3. **Use images** — upload an image and ask about it, describe an image to generate one, or ask to edit an image:
 
    - View: *“What's in this image?”* / *“Extract the text from this screenshot.”*
@@ -84,21 +84,21 @@ Browser-framed captures of the plugin in the DeepSeek Harness Web UI — light a
   <img src="assets/models-en-dark.png" width="46%" alt="Models page — OpenAI subscription expanded (dark)" />
 </p>
 
-**Using images in a conversation — image understanding (GPT-5.6-Sol · High):**
+**Using images in a conversation — image understanding:**
 
 <p align="center">
   <img src="assets/chat-image-en-light.png" width="46%" alt="Image understanding (light)" />
   <img src="assets/chat-image-en-dark.png" width="46%" alt="Image understanding (dark)" />
 </p>
 
-**Generating images in a conversation — text to image (GPT-5.6-Sol · High):**
+**Generating images in a conversation — text to image:**
 
 <p align="center">
   <img src="assets/chat-generate-en-light.png" width="46%" alt="Text to image (light)" />
   <img src="assets/chat-generate-en-dark.png" width="46%" alt="Text to image (dark)" />
 </p>
 
-**Editing images in a conversation — image to image (GPT-5.6-Sol · High):**
+**Editing images in a conversation — image to image:**
 
 <p align="center">
   <img src="assets/chat-edit-en-light.png" width="46%" alt="Image to image (light)" />
