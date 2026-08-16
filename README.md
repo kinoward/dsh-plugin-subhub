@@ -11,7 +11,6 @@
 <p align="center">
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Awesome DSH Plugin" /></a>
   <a href="https://github.com/zp-home/dsh-recommend"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fzp-home%2Fdsh-recommend%2Fmain%2Fdata%2Fbadges%2Fkinoward__dsh-plugin-subhub.certified.json" alt="dsh-recommend · certified" /></a>
-  <a href="https://github.com/zp-home/dsh-recommend"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fzp-home%2Fdsh-recommend%2Fmain%2Fdata%2Fbadges%2Fkinoward__dsh-plugin-subhub.json" alt="dsh score" /></a>
   <a href="https://github.com/kinoward/dsh-plugin-subhub/stargazers"><img src="https://img.shields.io/github/stars/kinoward/dsh-plugin-subhub" alt="GitHub stars" /></a>
 </p>
 
