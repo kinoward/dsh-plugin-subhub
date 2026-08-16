@@ -1,165 +1,122 @@
 # dsh-plugin-subhub
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<p align="center">
+  <img src="assets/hero.svg" width="100%" alt="dsh-plugin-subhub — third-party subscription accounts inside DeepSeek Harness" />
+</p>
 
-在 DeepSeek Harness 中登录你的 **ChatGPT 订阅账户**，使用账户可用的 OpenAI 模型进行对话。
+<p align="center">
+  English · <a href="README.zh.md">中文</a>
+</p>
 
-目前支持文字对话、图片理解、图片生成和图片编辑。
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Node.js-%3E%3D18.17-339933?logo=nodedotjs&logoColor=white" alt="Node.js >= 18.17" /></a>
+  <img src="https://img.shields.io/badge/DSH-Web%20profile-5B4CF0" alt="DSH Web profile" />
+</p>
 
-> 可用模型、使用额度和响应速度由 OpenAI 及你的账户决定。OpenAI 调整服务后，部分功能可能暂时不可用。
+Bring a **third-party subscription account** into [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and chat with the models your subscription covers: text chat, image understanding, image generation, and image editing.
 
-## 目录
+**OpenAI / ChatGPT subscriptions are supported today; more subscription services are planned.**
 
-1. [安装](#1-安装)
-2. [登录](#2-登录)
-3. [选择模型](#3-选择模型)
-4. [使用图片](#4-使用图片)
-5. [账户与插件管理](#5-账户与插件管理)
-6. [常见问题](#6-常见问题)
-7. [安全、反馈与许可](#7-安全反馈与许可)
+> Model availability, usage limits, and response speed are decided by the subscription provider and your account. Some features may become temporarily unavailable after the provider changes its service.
 
-## 1. 安装
+## Install
 
-需要先安装 `dsh` CLI，并使用 Node.js 18.17 或更高版本。
-
-下面以名为 `web` 的 profile 为例：
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) with Node.js 18.17 or later.
 
 ```sh
 dsh plugin --profile web add github:kinoward/dsh-plugin-subhub
-dsh --profile web
+dsh web
 ```
 
-如果 profile 名为 `web`，也可以使用 `dsh web` 启动。
+`dsh web` boots the `web` profile (same as `dsh --profile web`). Restart DeepSeek Harness after installing.
 
-## 2. 登录
+## Quick start
 
-1. 打开 **设置 → 第三方订阅**。
-2. 在 **OpenAI 订阅** 卡片中点击「登录」。
-3. 按页面提示打开授权链接，输入一次性码并完成登录。
+1. **Log in** — open **Settings → Third-party subscriptions**, click **Sign in** on the **OpenAI subscription** card, then open the authorization link in a browser and enter the one-time code (valid for 15 minutes). Once authorized, the page syncs automatically and the subscription appears in the model picker.
+2. **Pick a model** — click the model selector at the bottom-left of the input area (it shows the current model and reasoning level), choose **Model**, and pick a GPT model under **OpenAI subscription**. Adjust the reasoning level from the same menu if needed. Available models and reasoning levels come from your account and stay in sync automatically.
+3. **Use images** — upload an image and ask about it, describe an image to generate one, or ask to edit an image:
 
-> 插件不会读取 Codex CLI 或其他程序保存的登录信息。安装后，需要在本插件中单独登录一次。
+   - View: *“What's in this image?”* / *“Extract the text from this screenshot.”*
+   - Generate: *“A cinematic illustration of a neon street on a rainy night.”*
+   - Edit: upload an image (or use the one just generated), then *“Change the sky to a sunset, keep everything else the same.”* The edit uses the most recent image in the conversation; upload one first if there is none.
 
-### 没有图形界面时登录
+   Viewing, generating, and editing images all require a model that supports image input; the model info marks it with an “Image input” tag.
 
-请先进入所用 profile 的目录，再运行：
+### Manage your account
+
+- **Re-login / log out** — **Settings → Third-party subscriptions** → **Log in again** switches accounts; **Log out** removes the saved login.
+- **Update** — rerun the install command, then restart DeepSeek Harness.
+- **Disable** — **Settings → Plugins → Plugin list** → turn off `dsh-plugin-subhub`.
+
+## CLI sign-in (optional)
+
+No graphical interface? Sign in with the bundled script instead. From the profile directory, run:
 
 ```sh
 node node_modules/dsh-plugin-subhub/login.js
 ```
 
-登录完成后，打开一次 **设置 → 第三方订阅**。如果模型仍未出现，请重新启动 DeepSeek Harness。
+The script prints an authorization link and a one-time code — open the link in a browser, enter the code, and the credentials are saved to `~/.dsh-plugin-subhub/openai-auth.json`. After signing in, open **Settings → Third-party subscriptions** once so the subscription appears in the model picker.
 
-## 3. 选择模型
+## Screenshots
 
-1. 打开左下角的 **选择模型**。
-2. 选择 **OpenAI 订阅**。
-3. 选择想用的模型，然后开始对话。
+Browser-framed captures of the plugin in the DeepSeek Harness Web UI — light and dark themes:
 
-可用模型和思考深度会根据你的账户自动显示，不需要手动填写。
+**Settings → Third-party subscriptions — signed out:**
 
-## 4. 使用图片
+<p align="center">
+  <img src="assets/settings-loggedout-en-light.png" width="46%" alt="Subscriptions settings — signed out (light)" />
+  <img src="assets/settings-loggedout-en-dark.png" width="46%" alt="Subscriptions settings — signed out (dark)" />
+</p>
 
-### 查看图片
+**Settings → Third-party subscriptions — signed in:**
 
-上传图片后直接提问，例如：
+<p align="center">
+  <img src="assets/settings-loggedin-en-light.png" width="46%" alt="Subscriptions settings — signed in (light)" />
+  <img src="assets/settings-loggedin-en-dark.png" width="46%" alt="Subscriptions settings — signed in (dark)" />
+</p>
 
-- “这张图片里有什么？”
-- “帮我提取图片中的文字。”
-- “分析这张截图里的报错。”
+**Models page — OpenAI subscription expanded (signed in):**
 
-请使用支持图片的模型。是否支持会显示在模型信息中。
+<p align="center">
+  <img src="assets/models-en-light.png" width="46%" alt="Models page — OpenAI subscription expanded (light)" />
+  <img src="assets/models-en-dark.png" width="46%" alt="Models page — OpenAI subscription expanded (dark)" />
+</p>
 
-### 生成图片
+**Using images in a conversation — image understanding (GPT-5.6-Sol · High):**
 
-直接描述想要的画面，例如：
+<p align="center">
+  <img src="assets/chat-image-en-light.png" width="46%" alt="Image understanding (light)" />
+  <img src="assets/chat-image-en-dark.png" width="46%" alt="Image understanding (dark)" />
+</p>
 
-> 生成一张雨夜霓虹街道的电影感插画。
+**Generating images in a conversation — text to image (GPT-5.6-Sol · High):**
 
-生成成功后，图片会显示在对话中，可以下载。
+<p align="center">
+  <img src="assets/chat-generate-en-light.png" width="46%" alt="Text to image (light)" />
+  <img src="assets/chat-generate-en-dark.png" width="46%" alt="Text to image (dark)" />
+</p>
 
-### 编辑图片
+**Editing images in a conversation — image to image (GPT-5.6-Sol · High):**
 
-先上传图片，或使用当前对话中刚生成的图片，然后说明修改要求，例如：
+<p align="center">
+  <img src="assets/chat-edit-en-light.png" width="46%" alt="Image to image (light)" />
+  <img src="assets/chat-edit-en-dark.png" width="46%" alt="Image to image (dark)" />
+</p>
 
-> 把天空改成晚霞，其他内容保持不变。
+## Security & privacy
 
-插件会使用当前对话中最近的一张图片。没有图片时，请先上传一张。
+- Unless you configure another location, login data is stored in `~/.dsh-plugin-subhub/openai-auth.json`;
+- The plugin creates or updates that file with access restricted to the current system user;
+- The plugin never reads login data saved by other programs (such as the Codex CLI); sign in once inside this plugin after installing;
+- Signing out deletes the login file the plugin currently uses;
+- Don't share login files, one-time codes, or other account details — and don't commit them to Git or post them in issues.
 
-## 5. 账户与插件管理
+## Support
 
-### 更换账户或退出登录
+- [GitHub Issues](https://github.com/kinoward/dsh-plugin-subhub/issues) — report bugs or request features. Remove account details and other sensitive content before posting.
 
-打开 **设置 → 第三方订阅**：
+## License
 
-- 点击「重新登录」可以更换账户；
-- 点击「退出登录」会删除本插件保存的登录信息；
-- 退出后，**OpenAI 订阅** 会从模型列表中移除。
-
-### 更新插件
-
-再次执行安装命令即可更新：
-
-```sh
-dsh plugin --profile web add github:kinoward/dsh-plugin-subhub
-```
-
-更新完成后，请重新启动 DeepSeek Harness。
-
-### 停用插件
-
-打开 **设置 → 插件 → 插件列表**，找到 `dsh-plugin-subhub` 后将其停用。
-
-## 6. 常见问题
-
-### 登录后看不到 OpenAI 订阅
-
-请依次尝试：
-
-1. 打开一次 **设置 → 第三方订阅**；
-2. 确认页面显示已经登录；
-3. 重新启动 DeepSeek Harness；
-4. 再打开 **选择模型** 查看。
-
-### 一次性码过期了
-
-回到 **第三方订阅** 页面，重新点击「登录」获取新的码。
-
-### 页面提示“仅支持本机访问”
-
-请通过 `127.0.0.1` 或 `localhost` 打开 DeepSeek Harness。
-
-如果 Harness 运行在远程设备上，可以建立 SSH 端口转发：
-
-```sh
-ssh -L 3080:127.0.0.1:3080 <远程主机>
-```
-
-然后在本机打开 `http://127.0.0.1:3080`。如果只需要完成登录，也可以使用上面的登录脚本。
-
-### 看不到某个模型或思考深度
-
-插件通常会根据当前账户显示模型和选项。不同账户、订阅方案或服务状态下，看到的内容可能不同；服务暂时不可用时，页面也可能显示备用模型。最终能否使用以 OpenAI 返回的结果为准。
-
-### 图片无法发送、生成或编辑
-
-先确认当前模型支持图片，然后重试。如果仍然失败，可能是账户暂不支持、达到使用额度、受到限速，或 OpenAI 服务发生了变化。
-
-## 7. 安全、反馈与许可
-
-### 安全与隐私
-
-- 未自定义保存位置时，登录信息保存在 `~/.dsh-plugin-subhub/openai-auth.json`；
-- 插件创建或更新该文件时，会将访问权限限制为仅当前系统用户可读写；
-- 插件不会读取其他程序的登录文件；
-- 退出登录会删除本插件当前使用的登录文件；
-- 不要分享登录文件、一次性码或其他账户信息，也不要把它们提交到 Git 或 Issue。
-
-### 反馈
-
-遇到问题或希望提出建议，请前往 [GitHub Issues](https://github.com/kinoward/dsh-plugin-subhub/issues)。
-
-反馈时请说明操作系统、DeepSeek Harness 版本、问题发生在哪一步，以及页面或终端显示的错误。发送前请删除账户信息和其他敏感内容。
-
-### 许可
-
-本项目采用 [MIT License](LICENSE)。你可以使用、修改和商用；分发本软件副本或其重要部分时，请保留原版权声明和 MIT 许可文本。
+[MIT](LICENSE)
