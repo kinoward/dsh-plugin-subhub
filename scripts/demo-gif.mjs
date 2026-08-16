@@ -24,6 +24,8 @@
  * Notes
  *  - Credentials always live in the plugin-owned directory ~/.dsh-plugin-subhub;
  *    the temp DSH_HOME does not relocate them.
+ *  - Frame files keep their two-digit NN- prefix: ffmpeg reads them in
+ *    lexical order, which matches the capture order.
  *  - UI texts follow the harness language setting. The SELECTORS below cover
  *    English first with Chinese fallbacks; adjust them if a step fails after
  *    a harness UI change. A missing selector logs a warning and skips that
@@ -226,7 +228,8 @@ async function main() {
     spawnSyncChecked('ffmpeg', [
       '-y',
       '-framerate', GIF_FPS,
-      '-i', join(FRAME_DIR, '%02d-*.png'),
+      '-pattern_type', 'glob',
+      '-i', join(FRAME_DIR, '*.png'),
       '-vf', 'scale=1200:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=256[p];[s1][p]paletteuse=dither=bayer',
       '-loop', '0',
       OUT,
