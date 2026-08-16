@@ -59,7 +59,7 @@ README.md                       人类:英文主文档:定位、安装、快速�
 README.zh.md                    人类:中文镜像,与 README.md 结构同步
 LICENSE                         MIT 许可文本(条款不可改写)
 docs/development.md             人类:开发循环、验证、分发
-assets/                         人类:README 使用的横幅与截图素材(hero.svg / hero-zh.svg / settings-*.png / models-*.png;截图已对绝对路径打码)
+assets/                         人类:README 使用的横幅与截图素材(hero-en.svg / hero-zh.svg / settings-*.png / models-*.png;截图已对绝对路径打码)
 package.json                    唯一清单:dsh.bundle.patch、exports、dsh.client、依赖
 cordis.patch.yml                补丁层:本插件一行(id 与 name 均为 dsh-plugin-subhub)
 login.js                        随包登录脚本(README「命令行登录」小节)
