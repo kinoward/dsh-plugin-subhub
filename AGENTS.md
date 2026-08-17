@@ -62,6 +62,7 @@ CHANGELOG.md                    人类:版本变更记录(Keep a Changelog 风�
 VERSION                         维护:当前发布版本(vX.Y.Z,与 CHANGELOG.md 最新节、package.json version 三者一致)
 docs/development.md             人类:开发循环、验证、分发
 assets/                         人类:README 使用的横幅与截图素材(hero-en.svg / hero-zh.svg / hero-en.png / og-image.png 社交预览图 / settings-*.png / models-*.png;截图已对绝对路径打码)
+share-wechat.png / share-wechat-2.png 人类:微信分享卡片图素材(仓库根目录,与 assets 同属素材文件)
 package.json                    唯一清单:dsh.bundle.patch、exports、dsh.client、依赖
 cordis.patch.yml                补丁层:本插件一行(id 与 name 均为 dsh-plugin-subhub)
 login.js                        随包登录脚本(README「命令行登录」小节)
