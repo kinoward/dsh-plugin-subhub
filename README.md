@@ -17,19 +17,19 @@
 <p align="center">
   <a href="https://github.com/kinoward/dsh-plugin-subhub/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/release-v1.0.0-5B4CF0" alt="Release v1.0.0" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/Node.js-%3E%3D18.17-339933?logo=nodedotjs&logoColor=white" alt="Node.js >= 18.17" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Node.js-%3E%3D22.19-339933?logo=nodedotjs&logoColor=white" alt="Node.js >= 22.19" /></a>
   <img src="https://img.shields.io/badge/DSH-Web%20profile-5B4CF0" alt="DSH Web profile" />
 </p>
 
 Bring a **third-party subscription account** into [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and chat with the models your subscription covers: text chat, image understanding, image generation, and image editing.
 
-**Only OpenAI / ChatGPT subscriptions are supported today; more subscription services are planned.**
+**OpenAI / ChatGPT and xAI (Grok) subscriptions are supported today; more subscription services are planned.**
 
 > Model availability, usage limits, and response speed are decided by the subscription provider and your account. Some features may become temporarily unavailable after the provider changes its service.
 
 ## Install
 
-- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) with Node.js 18.17 or later.
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) with Node.js 22.19 or later.
 
 ```sh
 dsh plugin --profile web add github:kinoward/dsh-plugin-subhub
@@ -40,7 +40,7 @@ dsh web
 
 ## Quick start
 
-1. **Log in** — open **Settings → Third-party subscriptions**, click **Sign in** on the **OpenAI subscription** card, then open the authorization link in a browser and enter the one-time code (valid for 15 minutes). Once authorized, the page syncs automatically and the subscription appears in the model picker.
+1. **Log in** — open **Settings → Third-party subscriptions**, click **Sign in** on the **OpenAI subscription** card (ChatGPT account) or the **xAI Grok subscription** card (SuperGrok / X Premium+ account), then open the authorization link in a browser and enter the one-time code (valid for 15 minutes). Once authorized, the page syncs automatically and the subscription appears in the model picker.
 2. **Pick a model** — click the model selector at the bottom-left of the input area (it shows the current model and reasoning level), choose **Model**, and pick a model under **OpenAI subscription**. Adjust the reasoning level from the same menu if needed. Available models and reasoning levels come from your account and stay in sync automatically.
 3. **Use images** — upload an image and ask about it, describe an image to generate one, or ask to edit an image:
 
@@ -64,7 +64,7 @@ No graphical interface? Sign in with the bundled script instead. From the profil
 node node_modules/dsh-plugin-subhub/login.js
 ```
 
-The script prints an authorization link and a one-time code — open the link in a browser, enter the code, and the credentials are saved to `~/.dsh-plugin-subhub/openai-auth.json`. After signing in, open **Settings → Third-party subscriptions** once so the subscription appears in the model picker.
+The script prints an authorization link and a one-time code — open the link in a browser, enter the code, and the credentials are saved to `~/.dsh-plugin-subhub/openai-auth.json`. After signing in, open **Settings → Third-party subscriptions** once so the subscription appears in the model picker. The bundled script currently covers OpenAI; xAI sign-in is available on the subscriptions page.
 
 ## Screenshots
 
@@ -114,10 +114,11 @@ Browser-framed captures of the plugin in the DeepSeek Harness Web UI — light a
 
 ## Security & privacy
 
-- Unless you configure another location, login data is stored in `~/.dsh-plugin-subhub/openai-auth.json`;
-- The plugin creates or updates that file with access restricted to the current system user;
+- Unless you configure another location, login data is stored in `~/.dsh-plugin-subhub/openai-auth.json` (OpenAI) or `~/.dsh-plugin-subhub/xai-auth.json` (xAI);
+- The plugin creates or updates those files with access restricted to the current system user;
 - The plugin never reads login data saved by other programs (such as the Codex CLI); sign in once inside this plugin after installing;
 - Signing out deletes the login file the plugin currently uses;
+- xAI sign-in reuses the same OAuth flow the official Grok CLI uses; it is a community-supported path, so xAI may change it at any time.
 - Don't share login files, one-time codes, or other account details — and don't commit them to Git or post them in issues.
 
 ## Support

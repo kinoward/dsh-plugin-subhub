@@ -17,19 +17,19 @@
 <p align="center">
   <a href="https://github.com/kinoward/dsh-plugin-subhub/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/release-v1.0.0-5B4CF0" alt="Release v1.0.0" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/Node.js-%3E%3D18.17-339933?logo=nodedotjs&logoColor=white" alt="Node.js >= 18.17" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Node.js-%3E%3D22.19-339933?logo=nodedotjs&logoColor=white" alt="Node.js >= 22.19" /></a>
   <img src="https://img.shields.io/badge/DSH-Web%20profile-5B4CF0" alt="DSH Web profile" />
 </p>
 
 把**第三方订阅账户**接入 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，使用订阅覆盖的模型进行对话：文字对话、图片理解、图片生成与图片编辑。
 
-**目前仅支持 OpenAI（ChatGPT）订阅，更多订阅服务规划中。**
+**目前支持 OpenAI（ChatGPT）与 xAI（Grok）订阅，更多订阅服务规划中。**
 
 > 可用模型、使用额度和响应速度由订阅服务商及你的账户决定。服务商调整服务后，部分功能可能暂时不可用。
 
 ## 安装
 
-- 已安装 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`），Node.js 18.17 或更高版本。
+- 已安装 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`），Node.js 22.19 或更高版本。
 
 ```sh
 dsh plugin --profile web add github:kinoward/dsh-plugin-subhub
@@ -40,7 +40,7 @@ dsh web
 
 ## 快速开始
 
-1. **登录** —— 打开 **设置 → 第三方订阅**，在 **OpenAI 订阅** 卡片上点击「登录」，在浏览器中打开授权链接并输入一次性码（码 15 分钟内有效）。完成授权后页面会自动同步，订阅随即出现在模型选择器中。
+1. **登录** —— 打开 **设置 → 第三方订阅**，在 **OpenAI 订阅** 卡片（ChatGPT 账号）或 **xAI Grok 订阅** 卡片（SuperGrok / X Premium+ 账号）上点击「登录」，在浏览器中打开授权链接并输入一次性码（码 15 分钟内有效）。完成授权后页面会自动同步，订阅随即出现在模型选择器中。
 2. **选择模型** —— 点击输入框左下角的模型选择器（显示当前模型与推理等级），点「模型」，在 **OpenAI 订阅** 分组下选择想用的模型；需要时可在同一菜单中调整推理等级。可用模型与推理等级随账户自动同步显示。
 3. **使用图片** —— 上传图片并提问、描述画面生成图片，或要求编辑图片：
 
@@ -64,7 +64,7 @@ dsh web
 node node_modules/dsh-plugin-subhub/login.js
 ```
 
-脚本会打印授权链接和一次性码：在浏览器打开链接、输入码后，凭据会写入 `~/.dsh-plugin-subhub/openai-auth.json`。登录完成后，打开一次 **设置 → 第三方订阅**，订阅即可出现在模型选择器中。
+脚本会打印授权链接和一次性码：在浏览器打开链接、输入码后，凭据会写入 `~/.dsh-plugin-subhub/openai-auth.json`。登录完成后，打开一次 **设置 → 第三方订阅**，订阅即可出现在模型选择器中。随包脚本目前只覆盖 OpenAI；xAI 登录请在「第三方订阅」页完成。
 
 ## 界面预览
 
@@ -114,10 +114,11 @@ node node_modules/dsh-plugin-subhub/login.js
 
 ## 安全与隐私
 
-- 未自定义保存位置时，登录信息保存在 `~/.dsh-plugin-subhub/openai-auth.json`；
-- 插件创建或更新该文件时，会将访问权限限制为仅当前系统用户可读写；
+- 未自定义保存位置时，登录信息保存在 `~/.dsh-plugin-subhub/openai-auth.json`（OpenAI）或 `~/.dsh-plugin-subhub/xai-auth.json`（xAI）；
+- 插件创建或更新这些文件时，会将访问权限限制为仅当前系统用户可读写；
 - 插件不会读取 Codex CLI 或其他程序保存的登录信息，安装后需要在本插件中单独登录一次；
 - 退出登录会删除本插件当前使用的登录文件；
+- xAI 登录复用官方 Grok CLI 的同一套 OAuth 流程，属于社区支持路径，xAI 可能随时调整；
 - 不要分享登录文件、一次性码或其他账户信息，也不要把它们提交到 Git 或 Issue。
 
 ## 支持

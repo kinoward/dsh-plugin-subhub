@@ -5,12 +5,12 @@
 ## 环境
 
 - 已安装的 `dsh` CLI(npx 启动的部署即可);
-- Node.js 18.17+(宿主插件依赖 `AbortSignal.any`,更早的小版本会在运行时报错);
+- Node.js 22.19+(宿主插件依赖 pi-ai 运行时,其引擎要求与 harness 自带版本一致);
 - 不需要构建工具链:仓库是纯 JavaScript,无编译步骤。
 
 ## 仓库结构
 
-本仓库就是 dsh-plugin-subhub 一个插件:`src/index.js` 是宿主半边(LLM 适配器 + 登录 API),`src/client.js` 是客户端半边(「第三方订阅」中心页),`src/device-flow.js` 是两边共用的 OpenAI 设备码登录流程,`login.js` 是无头环境用的独立登录脚本。根 `package.json` 同时声明 `dsh.bundle.patch`(bundle 安装机制,`dsh plugin add` 唯一支持的形态)与 `dsh.client`(客户端模块声明);`cordis.patch.yml` 是本插件唯一一行挂载(`id` 与挂载模块均为 `dsh-plugin-subhub`)。
+本仓库就是 dsh-plugin-subhub 一个插件:`src/index.js` 是宿主半边(LLM 适配器 + 登录 API),`src/client.js` 是客户端半边(「第三方订阅」中心页),`src/device-flow.js` 是两边共用的 OpenAI 设备码登录流程,`login.js` 是无头环境用的独立登录脚本。OpenAI 之外的新订阅商走 pi-ai 通用底座:`src/piai.js`(凭据文件存储 + 浏览器登录控制器 + pi-ai 适配器桥接 + 通用注册),每家只需一个规格文件(样板见 `src/providers/xai.js`)。根 `package.json` 同时声明 `dsh.bundle.patch`(bundle 安装机制,`dsh plugin add` 唯一支持的形态)与 `dsh.client`(客户端模块声明);`cordis.patch.yml` 是本插件唯一一行挂载(`id` 与挂载模块均为 `dsh-plugin-subhub`)。
 
 ## 本机开发循环
 
@@ -65,7 +65,7 @@ node login.js
 
 登录 API 是宿主插件注册的 `webServer` 前缀路由(`/api/dsh-plugin-subhub/*`,只接受本机同源请求;含 `status`/`start`/`poll`/`logout`/`models`),「第三方订阅」中心页 UI 是 `src/client.js`(手写模块加载器格式),由根 `package.json` 的 `dsh.client` 声明,并随 `settings.section` 插槽挂进设置侧边栏。
 
-**登录门控**:`ctx.llm` 上的 provider 路由只有凭据存在时才注册(登录成功即注册、退出登录即注销),因此「模型」页与模型选择器只显示已认证的服务;「模型」页通过 `llm/adapters-updated` 事件自动刷新。注册触发器有四处:插件挂载时、`dsh-plugin-subhub-openai:` 设置节变更时、网页登录/退出成功回调,以及「第三方订阅」页的状态轮询(登录状态变化时自愈补注册,因此**脚本登录后打开一次该页即可注册,不必重启**)。接入新订阅商(如 Anthropic、火山方舟)的约定:宿主插件提供自己的认证端点与凭据文件,provider id 用 `dsh-plugin-subhub-<服务商>`,客户端在中心页的 provider 数组里加一张卡片,复用同一个登录弹窗组件。
+**登录门控**:`ctx.llm` 上的 provider 路由只有凭据存在时才注册(登录成功即注册、退出登录即注销),因此「模型」页与模型选择器只显示已认证的服务;「模型」页通过 `llm/adapters-updated` 事件自动刷新。注册触发器有四处:插件挂载时、对应 `dsh-plugin-subhub-<服务商>:` 设置节变更时、网页登录/退出成功回调,以及「第三方订阅」页的状态轮询(登录状态变化时自愈补注册,因此**脚本登录后打开一次该页即可注册,不必重启**)。OpenAI 之外的新订阅商(xAI 为第一个)挂在 `src/piai.js` 的通用底座上:provider id 用 `dsh-plugin-subhub-<服务商>`、凭据文件 `~/.dsh-plugin-subhub/<服务商>-auth.json`、登录 API `/api/dsh-plugin-subhub/<服务商>/login/*`(嵌套在 OpenAI 的 `/api/dsh-plugin-subhub` 前缀之下,webserver 按最长前缀优先路由,不会互相遮蔽),客户端在中心页 provider 数组里加一张卡片并复用同一个登录弹窗组件。
 
 验证要点:
 
