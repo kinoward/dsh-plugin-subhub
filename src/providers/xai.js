@@ -26,6 +26,27 @@ const NS = settingsNamespace("dsh-plugin-subhub-xai");
  */
 const SUBSCRIPTION_BASE_URL = "https://cli-chat-proxy.grok.com/v1";
 const API_BASE_URL = "https://api.x.ai/v1";
+/**
+ * The cli-chat-proxy backend gates requests on the official Grok CLI's
+ * client fingerprint: `x-grok-client-version` (HTTP 426 when absent or too
+ * old), the proxy auth middleware pair, a client mode, and a matching
+ * User-Agent. The official CLI carries these values in its default headers;
+ * the subscription bridge sends the same vocabulary. Bump the version when
+ * the proxy raises its floor (the reviewed upstream revision shipped 0.2.5).
+ */
+const GROK_CLIENT_VERSION = "0.2.5";
+const GROK_OS = process.platform === "darwin" ? "macos" : process.platform === "win32" ? "windows" : process.platform;
+const GROK_ARCH = process.arch === "arm64" ? "aarch64" : process.arch;
+function grokProxyHeaders() {
+	return {
+		"x-grok-client-identifier": "grok-shell",
+		"x-grok-client-version": GROK_CLIENT_VERSION,
+		"x-grok-client-mode": "headless",
+		"X-XAI-Token-Auth": "xai-grok-cli",
+		"x-authenticateresponse": "authenticate-response",
+		"User-Agent": `grok-shell/${GROK_CLIENT_VERSION} (${GROK_OS}; ${GROK_ARCH})`
+	};
+}
 const Config = z.object({
 	authFile: z.string(),
 	baseURL: z.string(),
@@ -62,8 +83,8 @@ function effectiveBaseURL(config) {
 }
 /**
  * Static fallback catalog built from pi-ai's shipped xai model data, shown
- * only while the live /models endpoint is unreachable. It never merges into
- * the live list.
+ * only while the live /models-v2 endpoint is unreachable. It never merges
+ * into the live list.
  */
 function fallbackDescriptors(piModels, piProvider) {
 	return piModels.getModels(piProvider.id).map((model) => ({
@@ -80,17 +101,26 @@ function fallbackDescriptors(piModels, piProvider) {
  */
 async function liveCatalog(config, apiKey, _piProviderId, _piModels) {
 	const baseURL = effectiveBaseURL(config);
-	const response = await fetch(`${baseURL}/models`, {
-		headers: {
-			"authorization": `Bearer ${apiKey}`
-		}
-	});
+	const headers = {
+		"authorization": `Bearer ${apiKey}`,
+		...grokProxyHeaders()
+	};
+	// The OAuth catalog route is /models-v2; the older /models shape is kept
+	// as a fallback for backend revisions that still serve it.
+	let response = await fetch(`${baseURL}/models-v2`, { headers });
+	if (!response.ok) {
+		response = await fetch(`${baseURL}/models`, { headers });
+	}
 	if (!response.ok) throw new Error(`xai: model catalog request failed (HTTP ${response.status})`);
 	const body = await response.json();
 	const raw = Array.isArray(body?.models) ? body.models : Array.isArray(body?.data) ? body.data : [];
 	return raw.filter((entry) => typeof entry?.id === "string").map((entry) => ({
 		id: entry.id,
 		name: typeof entry.display_name === "string" && entry.display_name.length > 0 ? entry.display_name : typeof entry.name === "string" && entry.name.length > 0 ? entry.name : entry.id,
+		// The proxy serves accounts whose models speak the Responses API
+		// (`api_backend: "responses"`, e.g. grok-4.6); unknown live ids are
+		// dispatched through the matching pi-ai wire protocol.
+		api: entry.api_backend === "responses" ? "openai-responses" : "openai-completions",
 		...Number.isInteger(entry.context_window) && entry.context_window > 0 ? { contextWindow: entry.context_window } : {},
 		...(Array.isArray(entry.input_modalities) ? { inputModalities: entry.input_modalities.filter((modality) => modality === "text" || modality === "image") } : { inputModalities: ["text", "image"] })
 	}));
@@ -112,6 +142,9 @@ function registerXai(ctx, config) {
 		providerFactory: () => xaiProvider(),
 		fallbackDescriptors,
 		liveCatalog,
+		// The cli-chat-proxy version gate (HTTP 426) and auth middleware read
+		// these headers off every subscription request.
+		modelHeaders: grokProxyHeaders,
 		// Reasoning effort stays off until a real account confirms the
 		// subscription proxy accepts (and the account quota honors) the
 		// reasoning_effort parameter pi-ai would send.
@@ -119,4 +152,4 @@ function registerXai(ctx, config) {
 		displayName: (lang) => lang === "en" ? "xAI Grok subscription" : "xAI Grok 订阅"
 	});
 }
-export { API_BASE_URL, PROVIDER, SUBSCRIPTION_BASE_URL, fallbackDescriptors, liveCatalog, registerXai, resolveAdapterOptions };
+export { API_BASE_URL, PROVIDER, SUBSCRIPTION_BASE_URL, fallbackDescriptors, grokProxyHeaders, liveCatalog, registerXai, resolveAdapterOptions };

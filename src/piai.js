@@ -815,25 +815,29 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 	providerRetryPolicy(_provider) {
 		return this.config.options().retryPolicy;
 	}
-	/** One pi-ai model for a harness model id, with the subscription baseURL applied. */
+	/** One pi-ai model for a harness model id, with the subscription baseURL, provider request headers, and live catalog facts applied. */
 	piModelFor(modelId) {
 		const base = this.config.piModels.getModel(this.config.piProviderId, modelId);
-		if (base !== void 0) return {
-			...base,
-			baseUrl: this.config.effectiveBaseURL(this.config.options())
-		};
+		const live = this.config.getLiveEntry?.(modelId);
+		const headers = this.config.modelHeaders?.() ?? {};
+		const clone = (model, id, name) => ({
+			...model,
+			id,
+			name,
+			baseUrl: this.config.effectiveBaseURL(this.config.options()),
+			...Number.isInteger(live?.contextWindow) ? { contextWindow: live.contextWindow } : {},
+			...(Object.keys(headers).length > 0 ? { headers: { ...(model.headers ?? {}), ...headers } } : {})
+		});
+		if (base !== void 0) return clone(base, modelId, base.name ?? modelId);
 		// A live-catalog id pi-ai does not ship (new model, alias): synthesize
-		// a clone of the provider's default completions model so the wire
-		// protocol dispatch still resolves.
+		// a clone of a static model speaking the wire protocol the account's
+		// catalog declares (`api_backend: "responses"` -> openai-responses),
+		// so protocol dispatch still resolves.
 		const defaults = this.config.piModels.getModels(this.config.piProviderId);
-		const template = defaults.find((model) => model.api === "openai-completions") ?? defaults[0];
+		const wanted = live?.api ?? "openai-completions";
+		const template = defaults.find((model) => model.api === wanted) ?? defaults.find((model) => model.api === "openai-completions") ?? defaults[0];
 		if (template === void 0) throw new LlmError(`${this.config.provider}: no pi-ai model template for "${modelId}"`, "UNKNOWN_MODEL");
-		return {
-			...template,
-			id: modelId,
-			name: modelId,
-			baseUrl: this.config.effectiveBaseURL(this.config.options())
-		};
+		return clone(template, modelId, modelId);
 	}
 	/** Reasoning efforts pi-ai would actually put on the wire for this model. */
 	effortsFor(modelId) {
@@ -947,7 +951,10 @@ function createCatalogCache({ provider, logger, options, getAuth, liveCatalog, f
 		value: void 0,
 		failureAt: 0
 	};
-	return async function listCatalog() {
+	// Latest successful live entries by model id, kept in sync so request
+	// dispatch can pick the wire protocol an account's catalog declares.
+	const liveById = new Map();
+	async function listCatalog() {
 		const config = options();
 		let apiKey;
 		try {
@@ -967,6 +974,8 @@ function createCatalogCache({ provider, logger, options, getAuth, liveCatalog, f
 				cache.value = live;
 				cache.at = now;
 				cache.key = key;
+				liveById.clear();
+				for (const entry of live) liveById.set(entry.id, entry);
 				return live;
 			}
 			cache.failureAt = now;
@@ -977,6 +986,10 @@ function createCatalogCache({ provider, logger, options, getAuth, liveCatalog, f
 			logger?.warn(error);
 			return fallbackDescriptors;
 		}
+	}
+	return {
+		listCatalog,
+		getLiveEntry: (modelId) => liveById.get(modelId)
 	};
 }
 /**
@@ -1039,6 +1052,16 @@ function registerSubscriptionProvider(ctx, config, spec) {
 	ctx.inject(["attachments"], (attachmentCtx) => {
 		attachments = attachmentCtx.attachments;
 	});
+	const catalogCache = createCatalogCache({
+		provider: spec.id,
+		logger: ctx.logger,
+		options,
+		getAuth: () => piModels.getAuth(piProvider.id),
+		liveCatalog: spec.liveCatalog,
+		fallbackDescriptors: spec.fallbackDescriptors(piModels, piProvider),
+		piProviderId: piProvider.id,
+		piModels
+	});
 	const adapter = new PiAiSubscriptionAdapter({
 		provider: spec.id,
 		options,
@@ -1047,18 +1070,11 @@ function registerSubscriptionProvider(ctx, config, spec) {
 		piModels,
 		piProviderId: piProvider.id,
 		reasoningEffort: spec.reasoningEffort,
+		modelHeaders: spec.modelHeaders,
+		getLiveEntry: catalogCache.getLiveEntry,
 		fallbackDescriptors: spec.fallbackDescriptors(piModels, piProvider),
 		resolveAttachments: () => attachments ?? ctx.get("attachments"),
-		listCatalog: createCatalogCache({
-			provider: spec.id,
-			logger: ctx.logger,
-			options,
-			getAuth: () => piModels.getAuth(piProvider.id),
-			liveCatalog: spec.liveCatalog,
-			fallbackDescriptors: spec.fallbackDescriptors(piModels, piProvider),
-			piProviderId: piProvider.id,
-			piModels
-		})
+		listCatalog: catalogCache.listCatalog
 	});
 	// The provider only becomes visible in the Models page and the model
 	// picker after the user authenticated through the plugin's own login
