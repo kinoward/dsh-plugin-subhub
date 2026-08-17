@@ -1,15 +1,17 @@
 // Client half of the dsh-plugin-subhub plugin: the "第三方订阅" settings
 // one hub page where every third-party subscription provider lives. Each
-// provider card shares the same login-modal surface; today OpenAI (ChatGPT /
-// OpenAI subscription) is wired end to end, and further providers plug in by
-// adding a card entry plus their own host-side auth endpoints. Only after a
-// successful login does the host register the provider route, which is what
-// makes it appear in the Models page and the model picker. The same plugin
-// also augments the Models page: expanding the OpenAI 订阅 row replaces the
-// generic settings chrome with a read-only live model catalog. The UI
-// follows the shell design system: shell primitives (Button / Modal /
-// StateDot), --dsw-alias-* theme tokens, and locale dictionaries registered
-// through the locale service. Hand-written client bundle in the shell's
+// provider card owns its login status and API base and shares the same
+// login-modal surface; OpenAI (ChatGPT / OpenAI subscription) and xAI
+// (SuperGrok / X Premium+) are wired end to end, and further providers plug
+// in by adding a card entry plus their own host-side auth endpoints. Only
+// after a successful login does the host register the provider route, which
+// is what makes it appear in the Models page and the model picker. The same
+// plugin also augments the Models page: expanding a subscription row
+// replaces the generic settings chrome with a read-only live model catalog
+// served by that provider's own catalog route. The UI follows the shell
+// design system: shell primitives (Button / Modal / StateDot),
+// --dsw-alias-* theme tokens, and locale dictionaries registered through
+// the locale service. Hand-written client bundle in the shell's
 // module-loader format (no build step).
 window.__ModuleLoader__.load({
 	id: "dsh-plugin-subhub",
@@ -74,10 +76,10 @@ window.__ModuleLoader__.load({
 			loggedInReady: "已登录,「{name}」提供商已就绪。",
 			expired: "一次性码已过期,请重新登录。",
 			loginFailed: "登录失败:{message}",
-			loginButton: "使用 ChatGPT 账号登录",
+			loginButton: "使用 {name}账号登录",
 			loginButtonAgain: "使用新账号登录",
 			modelsTitle: "可用模型",
-			modelsMeta: "来自 ChatGPT 订阅 · 共 {count} 个模型 · 实时同步",
+			modelsMeta: "来自 {name} · 共 {count} 个模型 · 实时同步",
 			modelsLoading: "正在读取模型列表…",
 			modelsError: "无法读取模型列表:{message}",
 			modelsEmpty: "暂无可用模型。",
@@ -124,10 +126,10 @@ window.__ModuleLoader__.load({
 			loggedInReady: "Signed in; the \"{name}\" provider is ready.",
 			expired: "The one-time code has expired. Please sign in again.",
 			loginFailed: "Sign-in failed: {message}",
-			loginButton: "Sign in with ChatGPT",
+			loginButton: "Sign in with {name}",
 			loginButtonAgain: "Sign in with a different account",
 			modelsTitle: "Available models",
-			modelsMeta: "From your ChatGPT subscription · {count} models · synced live",
+			modelsMeta: "From {name} · {count} models · synced live",
 			modelsLoading: "Reading the model list…",
 			modelsError: "Could not read the model list: {message}",
 			modelsEmpty: "No models are available.",
@@ -321,7 +323,7 @@ window.__ModuleLoader__.load({
 			return entry;
 		}
 		/** Render the catalog's ready state synchronously (no loading flash). */
-		function renderCatalogReady(container, t, models) {
+		function renderCatalogReady(container, t, models, providerName) {
 			container.textContent = "";
 			const section = document.createElement("section");
 			section.className = "dsh-plugin-sub-catalog";
@@ -343,7 +345,7 @@ window.__ModuleLoader__.load({
 			}
 			const meta = document.createElement("span");
 			meta.className = "dsh-plugin-sub-catalog-meta";
-			meta.textContent = t("modelsMeta", { count: models.length });
+			meta.textContent = t("modelsMeta", { name: providerName, count: models.length });
 			head.appendChild(meta);
 			const list = document.createElement("div");
 			list.className = "dsh-plugin-sub-catalog-list";
@@ -352,10 +354,10 @@ window.__ModuleLoader__.load({
 			container.appendChild(section);
 		}
 		/** Render the read-only catalog into one mount container. */
-		function renderCatalogInto(container, t, apiBase, loadCatalog, warmCatalog, revalidateCatalog) {
+		function renderCatalogInto(container, t, apiBase, loadCatalog, warmCatalog, revalidateCatalog, providerName) {
 			const cached = typeof warmCatalog === "function" ? warmCatalog(apiBase) : void 0;
 			if (cached !== void 0) {
-				renderCatalogReady(container, t, cached.value);
+				renderCatalogReady(container, t, cached.value, providerName);
 				// Warm render is synchronous (no loading flash); revalidate in
 				// the background so a changed credential identity swaps the
 				// list in without user action.
@@ -379,7 +381,7 @@ window.__ModuleLoader__.load({
 			section.appendChild(status);
 			container.appendChild(section);
 			loadCatalog(container, t, apiBase).then((models) => {
-				renderCatalogReady(container, t, models);
+				renderCatalogReady(container, t, models, providerName);
 			}, (error) => {
 				container.textContent = "";
 				const failed = document.createElement("section");
@@ -393,7 +395,7 @@ window.__ModuleLoader__.load({
 				retry.type = "button";
 				retry.className = "dsh-plugin-sub-retry";
 				retry.textContent = t("retry");
-				retry.addEventListener("click", () => renderCatalogInto(container, t, apiBase, loadCatalog, warmCatalog, revalidateCatalog));
+				retry.addEventListener("click", () => renderCatalogInto(container, t, apiBase, loadCatalog, warmCatalog, revalidateCatalog, providerName));
 				failed.appendChild(retry);
 				container.appendChild(failed);
 			});
@@ -461,12 +463,12 @@ window.__ModuleLoader__.load({
 			 * reports a different fingerprint and the fresh list replaces the
 			 * stale one as soon as it arrives.
 			 */
-			const revalidateCatalog = (container, t, apiBase) => {
+			const revalidateCatalog = (container, t, apiBase, providerName) => {
 				const warm = warmCatalog(apiBase);
 				if (warm === void 0) return;
 				api(`${apiBase}/models`).then((result) => {
 					if (result.fingerprint !== warm.fingerprint && container.isConnected) {
-						renderCatalogReady(container, t, acceptCatalog(apiBase, result));
+						renderCatalogReady(container, t, acceptCatalog(apiBase, result), providerName);
 					}
 				}).catch(() => {});
 			};
@@ -478,9 +480,11 @@ window.__ModuleLoader__.load({
 				return void 0;
 			};
 			const rows = new Set();
-			const rowApiBase = new WeakMap();
+			const rowEntries = new WeakMap();
 			const rowViews = new WeakMap();
 			const editorViews = new WeakMap();
+			/** Display name of one matched provider row in the active UI language. */
+			const displayNameFor = (entry) => uiLocale.startsWith("en") ? entry.names[1] : entry.names[0];
 			const augmentRow = (row) => {
 				const head = row.children[0];
 				if (!(head instanceof HTMLElement)) return;
@@ -515,7 +519,7 @@ window.__ModuleLoader__.load({
 				view.button.setAttribute("aria-label", t(open ? "collapse" : "expand"));
 				view.button.setAttribute("title", t(open ? "collapse" : "expand"));
 			};
-			const augmentEditor = (editor, apiBase) => {
+			const augmentEditor = (editor, apiBase, providerName) => {
 				for (const child of Array.from(editor.children)) {
 					const cls = typeof child.className === "string" ? child.className : "";
 					if ((cls.includes("editorHeader") || cls.includes("advancedHint") || cls.includes("editorActions")) && child.style.display !== "none") child.style.display = "none";
@@ -529,10 +533,10 @@ window.__ModuleLoader__.load({
 				}
 				if (!view.container.isConnected) {
 					editor.appendChild(view.container);
-					if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, apiBase, loadCatalog, warmCatalog, revalidateCatalog);
+					if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, apiBase, loadCatalog, warmCatalog, revalidateCatalog, providerName);
 					return;
 				}
-				if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, apiBase, loadCatalog, warmCatalog, revalidateCatalog);
+				if (view.container.childNodes.length === 0) renderCatalogInto(view.container, t, apiBase, loadCatalog, warmCatalog, revalidateCatalog, providerName);
 			};
 			let scanning = false;
 			const scan = () => {
@@ -547,9 +551,9 @@ window.__ModuleLoader__.load({
 					const row = span.closest("li");
 					if (row === null) continue;
 					rows.add(row);
-					rowApiBase.set(row, entry.apiBase);
+					rowEntries.set(row, entry);
 					augmentRow(row);
-					if (row.children.length >= 2 && row.children[1] instanceof HTMLElement) augmentEditor(row.children[1], entry.apiBase);
+					if (row.children.length >= 2 && row.children[1] instanceof HTMLElement) augmentEditor(row.children[1], entry.apiBase, displayNameFor(entry));
 				}
 			};
 			const observer = new MutationObserver(() => {
@@ -563,8 +567,9 @@ window.__ModuleLoader__.load({
 				for (const row of rows) {
 					augmentRow(row);
 					if (row.children.length >= 2 && row.children[1] instanceof HTMLElement) {
+						const entry = rowEntries.get(row);
 						const view = editorViews.get(row.children[1]);
-						if (view !== void 0 && view.container.isConnected) renderCatalogInto(view.container, t, rowApiBase.get(row) ?? API, loadCatalog, warmCatalog, revalidateCatalog);
+						if (view !== void 0 && view.container.isConnected) renderCatalogInto(view.container, t, entry?.apiBase ?? API, loadCatalog, warmCatalog, revalidateCatalog, entry !== void 0 ? displayNameFor(entry) : "");
 					}
 				}
 			});
@@ -743,7 +748,7 @@ window.__ModuleLoader__.load({
 					icon: h(IconUserOutline16),
 					key: "cta",
 					onClick: () => void start()
-				}, t(status.loggedIn === true ? "loginButtonAgain" : "loginButton")));
+				}, t(status.loggedIn === true ? "loginButtonAgain" : "loginButton", { name })));
 			}
 			return h("div", { className: "dsh-plugin-sub-panel" }, content);
 		}
