@@ -20,7 +20,7 @@
 ## 用户文档边界
 
 - `README.md`(英文主文档)与 `README.zh.md`(中文镜像)只服务插件使用者,按「定位 → 安装 → 快速开始(登录/选择模型/图片使用/账户管理)→ 命令行登录 → 界面预览 → 安全与隐私 → 支持 → 许可」组织;优先写用户要点击什么、执行什么、看到什么。安全隐私小节直接写在两个 README 末尾,不另建用户文档页面。
-- **定位口径**:README 把插件定位为「第三方订阅服务接入插件」,不得写成仅支持某一家订阅;明确当前仅接入 OpenAI / ChatGPT 订阅、其余订阅服务规划中。模型、额度、可用性由对应订阅服务商与账户决定。
+- **定位口径**:README 把插件定位为「第三方订阅服务接入插件」,不得写成仅支持某一家订阅;明确当前接入 OpenAI / ChatGPT 与 xAI / Grok 订阅、其余订阅服务规划中。模型、额度、可用性由对应订阅服务商与账户决定。
 - 不在 README 展开行 id、provider 路由、内部 API 与端点、OAuth/JWT 刷新、缓存与并发锁、SSE、请求字段、附件编码、工具注册方式、源码目录职责等实现细节。稳定的维护约束写在本文件,短期实现事实留在代码及 `docs/development.md`。
 - 不在 README 写死某个外部模型当前是否可用、是否支持图片或有哪些思考档位;以界面根据账户能力显示的结果为准。
 - 用户文案避免「完全」「实时」「永不」「与官方实现等价」等无法长期保证的绝对说法。描述外部服务时明确模型、额度、限速和可用性由服务商与账户决定。
@@ -45,7 +45,7 @@
 
 - `README.md`:人类文档主文件,用英文;`README.zh.md`:中文镜像,与 `README.md` 结构同步;`docs/`:人类文档,用中文。
 - `AGENTS.md`:本文件,AI 行为规范。
-- 插件本体:`src/index.js`(宿主半边)+ `src/client.js`(客户端半边)+ `src/device-flow.js`(共享设备码登录流程);挂载点 = 根 `package.json` 的 `exports` + 根 `cordis.patch.yml` 一行,行 id 与挂载模块统一 `dsh-plugin-subhub`。
+- 插件本体:`src/index.js`(宿主半边)+ `src/client.js`(客户端半边)+ `src/device-flow.js`(共享设备码登录流程);OpenAI 之外的新订阅商走 pi-ai 通用底座 `src/piai.js` + 规格文件 `src/providers/<服务商>.js`;挂载点 = 根 `package.json` 的 `exports` + 根 `cordis.patch.yml` 一行,行 id 与挂载模块统一 `dsh-plugin-subhub`。
 - `login.js`:随包登录脚本,用户从 profile 目录运行 `node node_modules/dsh-plugin-subhub/login.js`(见 README「命令行登录」小节);开发时在仓库根直接 `node login.js`。
 - 客户端两层 inject 不可混用:根 `package.json` 的 `dsh.client.inject` 是客户端 npm **包**依赖边;`src/client.js` 导出的 `inject` 是模块实际读取的 Cordis **服务**名(只用 `ctx.slots` 就写 `["slots"]`)。
 
@@ -70,11 +70,14 @@ scripts/demo-gif.mjs            维护:演示 GIF 采集脚本(Playwright 截图
 src/index.js                    插件代码(宿主半边:LLM 适配器与登录 API)
 src/client.js                   客户端半边:「第三方订阅」中心页(手写模块加载器格式)
 src/device-flow.js              共享的 OpenAI 设备码登录流程
+src/piai.js                     新增订阅商的 pi-ai 通用底座(凭据文件存储/浏览器登录控制器/pi-ai 适配器桥接/通用注册)
+src/providers/xai.js            xAI Grok 订阅规格(新服务商样板:常量/settings schema/在线与兜底模型目录/注册)
 ```
 
 按需读取的最小集:
 
 - 改动宿主半边:读 `src/index.js` + 根 `package.json` 的 `exports` + `cordis.patch.yml`;
+- 新增订阅商(pi-ai 底座):读 `src/piai.js` + `src/providers/xai.js`(样板)+ `src/index.js` 的注册块 + 客户端 `src/client.js` 的卡片;
 - 改动客户端半边:读 `src/client.js` + 根 `package.json` 的 `dsh.client`;
 - 改动集合层(清单/补丁/依赖):读根 `package.json` 与 `cordis.patch.yml`;
 - 改动文档:只读目标文档本身;

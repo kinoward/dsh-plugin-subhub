@@ -21,6 +21,7 @@ import { MAX_TIMER_DELAY_MS, idleWatchdog, timeoutOf } from "@deepseek-ai/dsh-ti
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { authFilePayload, exchangeAuthorizationCode, pollAuthorizationOnce, requestUserCode } from "./device-flow.js";
+import { registerXai } from "./providers/xai.js";
 /**
  * Reasoning-effort vocabulary the OpenAI backend advertises per model through
  * `supported_reasoning_levels`. The adapter does NOT hardcode the selection:
@@ -2219,6 +2220,12 @@ function apply(ctx, config) {
 			handler: (req, res) => void login.handle(req, res)
 		}), "openai: login api route");
 	});
+	// Additional subscription providers ride the shared pi-ai-backed core
+	// (src/piai.js). Each spec owns its provider-specific facts; the core
+	// owns the login API, the credential file, the settings section, and
+	// the login-gated directory + adapter registration, with the same four
+	// registration triggers the OpenAI provider uses.
+	registerXai(ctx, config);
 }
 //#endregion
-export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, name, resolveAdapterOptions };
+export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, name, registerXai, resolveAdapterOptions };
