@@ -20,7 +20,7 @@
 ## 用户文档边界
 
 - `README.md`(英文主文档)与 `README.zh.md`(中文镜像)只服务插件使用者,按「定位 → 安装 → 快速开始(登录/选择模型/图片使用/账户管理)→ 命令行登录 → 界面预览 → 安全与隐私 → 支持 → 许可」组织;优先写用户要点击什么、执行什么、看到什么。安全隐私小节直接写在两个 README 末尾,不另建用户文档页面。
-- **定位口径**:README 把插件定位为「第三方订阅服务接入插件」,不得写成仅支持某一家订阅;明确当前接入 OpenAI / ChatGPT 与 xAI / Grok 订阅、其余订阅服务规划中。模型、额度、可用性由对应订阅服务商与账户决定。
+- **定位口径**:README 把插件定位为「第三方订阅服务接入插件」,不得写成仅支持某一家订阅;「支持的服务」段落必须与已合入的提供商保持同步(登录方式:OAuth 订阅类与粘贴 API Key 类分开说明)。模型、额度、可用性由对应订阅服务商与账户决定。
 - 不在 README 展开行 id、provider 路由、内部 API 与端点、OAuth/JWT 刷新、缓存与并发锁、SSE、请求字段、附件编码、工具注册方式、源码目录职责等实现细节。稳定的维护约束写在本文件,短期实现事实留在代码及 `docs/development.md`。
 - 不在 README 写死某个外部模型当前是否可用、是否支持图片或有哪些思考档位;以界面根据账户能力显示的结果为准。
 - 用户文案避免「完全」「实时」「永不」「与官方实现等价」等无法长期保证的绝对说法。描述外部服务时明确模型、额度、限速和可用性由服务商与账户决定。
@@ -85,6 +85,7 @@ src/providers/github.js         GitHub Copilot 订阅规格(设备码登录与�
 src/providers/anthropic.js      Claude 订阅规格(回环 PKCE 登录;无账户目录接口,官方已知模型清单为目录)
 src/providers/google.js         Gemini 订阅规格(自写回环 PKCE 登录与 token 刷新;Generative Language API 在线目录)
 src/providers/kimi.js           Kimi Code 订阅规格(设备码登录,Anthropic Messages 协议;在线目录存在时优先)
+src/providers/api-key.js        API-key 类订阅规格工厂(火山方舟/阿里/ MiniMax/OpenRouter;密钥粘贴登录,无订阅令牌)
 ```
 
 按需读取的最小集:

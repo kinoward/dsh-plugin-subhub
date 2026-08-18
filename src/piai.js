@@ -291,6 +291,32 @@ function loginFailureToStatus(error) {
 	if (/timed out|expired|slow_down/i.test(message)) return { status: "expired" };
 	return { status: "error", message };
 }
+/** Read a small JSON request body (bounded; never trusts content-length). */
+function readJsonBody(req, limit = 16384) {
+	return new Promise((resolve, reject) => {
+		const chunks = [];
+		let size = 0;
+		req.on("data", (chunk) => {
+			size += chunk.length;
+			if (size > limit) {
+				reject(new Error("request body too large"));
+				req.destroy();
+				return;
+			}
+			chunks.push(chunk);
+		});
+		req.on("end", () => {
+			const text = Buffer.concat(chunks).toString("utf8");
+			if (text.trim() === "") return resolve({});
+			try {
+				resolve(JSON.parse(text));
+			} catch {
+				reject(new Error("invalid JSON body"));
+			}
+		});
+		req.on("error", reject);
+	});
+}
 /**
  * Owns the one pending login flow for a provider and answers the
  * third-party subscriptions page's login API. The browser only ever sees
@@ -299,7 +325,7 @@ function loginFailureToStatus(error) {
  * owning plugin can (un)register the provider route, and `onLanguageHint`
  * runs when a request reveals the harness UI language.
  */
-function createPiAiLoginController({ slug, providerId, models, store, filePath, logger, onAuthChanged, listCatalog, onLanguageHint, promptHandler, loginFn, customLogin }) {
+function createPiAiLoginController({ slug, providerId, models, store, filePath, logger, onAuthChanged, listCatalog, onLanguageHint, promptHandler, loginFn, customLogin, saveApiKey }) {
 	let pending;
 	// Last login state observed by the status route; drives the polling
 	// self-heal below.
@@ -445,6 +471,38 @@ function createPiAiLoginController({ slug, providerId, models, store, filePath, 
 					sendJson(res, 200, {
 						ok: true,
 						loggedIn: false,
+						authFile: filePath()
+					});
+					return;
+				}
+				if (path === `${LOGIN_API_PATH}/${slug}/login/apikey` && req.method === "POST" && saveApiKey !== void 0) {
+					const body = await readJsonBody(req);
+					const key = typeof body?.key === "string" ? body.key.trim() : "";
+					if (key.length === 0) {
+						sendJson(res, 400, {
+							ok: false,
+							code: "invalid-key",
+							message: "api key must be a non-empty string"
+						});
+						return;
+					}
+					// The spec's validator probes the key against the backend;
+					// an invalid key is refused before it is ever persisted.
+					try {
+						await saveApiKey(key);
+					} catch (error) {
+						sendJson(res, 400, {
+							ok: false,
+							code: "invalid-key",
+							message: error?.message ?? String(error)
+						});
+						return;
+					}
+					await store.modify(providerId, async () => ({ type: "api_key", key }));
+					notify();
+					sendJson(res, 200, {
+						ok: true,
+						loggedIn: true,
 						authFile: filePath()
 					});
 					return;
@@ -1297,6 +1355,11 @@ function registerSubscriptionProvider(ctx, config, spec) {
 		// controller into the same plugin-owned file.
 		loginFn: spec.login !== void 0 ? spec.login : (interaction) => piModels.login(piProvider.id, "oauth", interaction),
 		customLogin: spec.login !== void 0,
+		saveApiKey: spec.saveApiKey !== void 0 ? (key) => spec.saveApiKey(key, {
+			options,
+			piProviderId: piProvider.id,
+			piModels
+		}) : void 0,
 		onLanguageHint: (lang) => {
 			inferredLocale = lang;
 			syncDisplayName();

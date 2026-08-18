@@ -80,7 +80,7 @@ node login.js
 - **UI 文字跟随语言设置**:客户端用 `ctx.locale.register(ns, {zh, en})` 提供词典、`bind(ns)` 取翻译函数、`subscribe` 随语言切换重渲染;宿主侧的用户可见名称(如「模型」页目录里的提供商名)不能写死——客户端把 locale 快照(`ctx.locale.getSnapshot().active`,即 harness 当前界面语言)作为 `locale` 查询参数随登录 API 轮询带给宿主,宿主据此用目录条目的 `replace()` 原子换名;用户显式选择语言时以设置为准(宿主读 `settings.get("locale")?.preference`),`Accept-Language` 仅作非浏览器调用者的兜底。模型 ID、档位名、简介等来自账户接口的元数据保持原样、不做翻译。
 - **往外壳 React 树里注入内容**:外壳页面是构建产物的 React 树,不提供渲染接口;用 `MutationObserver`(childList+subtree,挂在 `document.body`)+ `queueMicrotask` 扫描目标行,用纯 DOM 构建节点。暖缓存同步渲染可以避免展开闪烁;重复扫描要幂等(挂载容器 `childNodes.length === 0` 才重建)。
 - **外壳运行时不等于类型声明**:`useCopyFeedback` 只在类型声明里,运行时没有导出;实际可用的是 `writeClipboard`(以及 `Button`/`Modal`/`StateDot`/若干图标)。以运行时导出为准,先验证再解构。
-- **Web UI 改动建议无头浏览器验证**:临时 `DSH_HOME` + 复制 profile 的 `package.json` 与 `pnpm-workspace.yaml` + `pnpm install --prefer-offline`,起 `dsh --profile web --port <新端口>`,用 Playwright chromium 驱动:跳过首次引导 → 设置 → 目标页面,断言文案与行为;结束后清理临时目录。
+- **Web UI 改动建议无头浏览器验证**:临时 `DSH_HOME` + 复制 profile 的 `package.json` 与 `pnpm-workspace.yaml` + `pnpm install --prefer-offline`,起 `dsh --profile web --port <新端口>`,用 Playwright chromium 驱动:跳过首次引导 → 设置 → 目标页面,断言文案与行为;结束后清理临时目录。settings 文件放在 `DSH_HOME/settings.yaml`;故意用假 key 测试 API-key 保存失败路径时,浏览器会为预期的 400 响应记录一条 `Failed to load resource` 控制台条目,断言「控制台零报错」时应排除这一条预期噪声。
 
 ## 新订阅商接入:规范与实战速查
 
@@ -105,6 +105,9 @@ node login.js
 | 7 | 登录弹窗/目录文案写死 ChatGPT,其它服务也显示 ChatGPT | 共享文案未参数化 | 共享文案用 `{name}` 参数化,取当前服务显示名(`src/client.js`) |
 | 8 | 后端拒绝 off 档(HTTP 400 invalid reasoning effort) | 该模型没有关闭档,目录也未声明 | Off 仅在目录声明时展示;目录只声明 high/xhigh 时就只显示这两档(低→高) |
 | 9 | 推送被仓库规则拦截(repository rule violations) | 代码内嵌了 Google OAuth client secret(`GOCSPX-` 触发密钥保护) | 机密一律走环境变量(见 `src/providers/google.js` 的 `GEMINI_OAUTH_CLIENT_SECRET`);公开 client id 可以入库 |
+| 10 | API-key 保存路由对个别服务商 404(MiniMax) | 路由只在「存在验证器」时注册,无目录接口的服务商永远 404 | 保存路由与验证器解耦:API-key 服务商一律注册路由,验证器存在才先探测、否则直接持久化(见 `src/providers/api-key.js` 的 `saveApiKey` 恒存在) |
+| 11 | OpenRouter 模型选择器出现 400+ 条目,含 `:batch`/`:free` 变体 | 其 `/models` 是公开目录、无账户过滤,批处理与免费变体全量返回 | 在线结果同样应用首方厂商前缀过滤,并剔除 `:batch` 与有付费同名的 `:free` 变体(见 `openRouterLiveCatalog`) |
+| 12 | API-key 类服务的模型页无目录行 | 验证脚本把 `settings.yaml` 放错位置(profile 子目录),设置未加载 | harness 的 settings 文件在 `DSH_HOME/settings.yaml`(harness home 根),不在 `profiles/<name>/` 下 |
 
 ### 真实账户最小验证配方
 

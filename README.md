@@ -23,7 +23,7 @@
 
 Bring a **third-party subscription account** into [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and chat with the models your subscription covers: text chat, image understanding, image generation, and image editing.
 
-**OpenAI / ChatGPT and xAI (Grok) subscriptions are supported today; more subscription services are planned.**
+**Supported today: OpenAI / ChatGPT, xAI (Grok), GitHub Copilot, Claude, Gemini, and Kimi Code subscriptions, plus API-key based plans on Volcengine Ark, Alibaba Cloud Bailian, MiniMax, and OpenRouter.**
 
 > Model availability, usage limits, and response speed are decided by the subscription provider and your account. Some features may become temporarily unavailable after the provider changes its service.
 
@@ -40,7 +40,7 @@ dsh web
 
 ## Quick start
 
-1. **Log in** — open **Settings → Third-party subscriptions**, click **Sign in** on the **OpenAI subscription** card (ChatGPT account) or the **xAI Grok subscription** card (SuperGrok / X Premium+ account), then open the authorization link in a browser and enter the one-time code (valid for 15 minutes). Once authorized, the page syncs automatically and the subscription appears in the model picker.
+1. **Log in** — open **Settings → Third-party subscriptions**, click **Sign in** on the card of the subscription you want (e.g. **OpenAI subscription** for a ChatGPT account or **xAI Grok subscription** for SuperGrok / X Premium+), then open the authorization link in a browser and enter the one-time code (valid for 15 minutes). Providers that sell plan-based API keys (Volcengine Ark, Alibaba Cloud Bailian, MiniMax, OpenRouter) take a pasted key instead. Once authorized, the page syncs automatically and the subscription appears in the model picker.
 2. **Pick a model** — click the model selector at the bottom-left of the input area (it shows the current model and reasoning level), choose **Model**, and pick a model under **OpenAI subscription**. Adjust the reasoning level from the same menu if needed. Available models and reasoning levels come from your account and stay in sync automatically.
 3. **Use images** — upload an image and ask about it, describe an image to generate one, or ask to edit an image:
 
@@ -64,7 +64,7 @@ No graphical interface? Sign in with the bundled script instead. From the profil
 node node_modules/dsh-plugin-subhub/login.js
 ```
 
-The script prints an authorization link and a one-time code — open the link in a browser, enter the code, and the credentials are saved to `~/.dsh-plugin-subhub/openai-auth.json`. After signing in, open **Settings → Third-party subscriptions** once so the subscription appears in the model picker. The bundled script currently covers OpenAI; xAI sign-in is available on the subscriptions page.
+The script prints an authorization link and a one-time code — open the link in a browser, enter the code, and the credentials are saved to `~/.dsh-plugin-subhub/openai-auth.json`. After signing in, open **Settings → Third-party subscriptions** once so the subscription appears in the model picker. The bundled script currently covers OpenAI; every other provider signs in on the subscriptions page.
 
 ## Screenshots
 
@@ -114,7 +114,7 @@ Browser-framed captures of the plugin in the DeepSeek Harness Web UI — light a
 
 ## Security & privacy
 
-- Unless you configure another location, login data is stored in `~/.dsh-plugin-subhub/openai-auth.json` (OpenAI) or `~/.dsh-plugin-subhub/xai-auth.json` (xAI);
+- Unless you configure another location, login data is stored in `~/.dsh-plugin-subhub/<provider>-auth.json` — one file per provider (e.g. `openai-auth.json` for OpenAI, `xai-auth.json` for xAI);
 - The plugin creates or updates those files with access restricted to the current system user;
 - The plugin never reads login data saved by other programs (such as the Codex CLI); sign in once inside this plugin after installing;
 - Signing out deletes the login file the plugin currently uses;
