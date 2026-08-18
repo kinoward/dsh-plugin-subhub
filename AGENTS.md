@@ -81,6 +81,7 @@ src/client.js                   客户端半边:「第三方订阅」中心页(�
 src/device-flow.js              共享的 OpenAI 设备码登录流程
 src/piai.js                     新增订阅商的 pi-ai 通用底座(凭据文件存储/浏览器登录控制器/pi-ai 适配器桥接/通用注册)
 src/providers/xai.js            xAI Grok 订阅规格(新服务商样板:常量/settings schema/在线与兜底模型目录/注册)
+src/providers/github.js         GitHub Copilot 订阅规格(设备码登录与账户模型目录,在线目录按 policy 过滤)
 ```
 
 按需读取的最小集:

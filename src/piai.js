@@ -252,7 +252,7 @@ function credentialFingerprint(filePath) {
  * (loopback flows such as anthropic) surface as an authorization link the
  * page opens and the host's loopback server completes.
  */
-function createInteraction(state, signal) {
+function createInteraction(state, signal, promptHandler) {
 	return {
 		signal,
 		notify(event) {
@@ -273,7 +273,12 @@ function createInteraction(state, signal) {
 				state.resolveFacts(state.facts);
 			}
 		},
-		async prompt() {
+		async prompt(input) {
+			// Some flows ask a question before showing public facts (GitHub
+			// Copilot asks for an Enterprise domain; loopback flows offer a
+			// manual code paste). The spec supplies the answer; flows without
+			// one keep the honest refusal.
+			if (promptHandler !== void 0) return await promptHandler(input);
 			throw new Error("interactive prompts are not available in the web login flow");
 		}
 	};
@@ -292,7 +297,7 @@ function loginFailureToStatus(error) {
  * owning plugin can (un)register the provider route, and `onLanguageHint`
  * runs when a request reveals the harness UI language.
  */
-function createPiAiLoginController({ slug, providerId, models, store, filePath, logger, onAuthChanged, listCatalog, onLanguageHint }) {
+function createPiAiLoginController({ slug, providerId, models, store, filePath, logger, onAuthChanged, listCatalog, onLanguageHint, promptHandler }) {
 	let pending;
 	// Last login state observed by the status route; drives the polling
 	// self-heal below.
@@ -323,7 +328,7 @@ function createPiAiLoginController({ slug, providerId, models, store, filePath, 
 		state.factsReady = new Promise((resolve) => {
 			state.resolveFacts = resolve;
 		});
-		state.promise = models.login(providerId, "oauth", createInteraction(state, controller.signal)).then(() => {
+		state.promise = models.login(providerId, "oauth", createInteraction(state, controller.signal, promptHandler)).then(() => {
 			state.result = { status: "success" };
 		}).catch((error) => {
 			state.result = loginFailureToStatus(error);
@@ -1271,6 +1276,7 @@ function registerSubscriptionProvider(ctx, config, spec) {
 		logger: ctx.logger,
 		onAuthChanged: syncRegistration,
 		listCatalog: () => adapter.listModels(spec.id),
+		promptHandler: spec.loginPrompt,
 		onLanguageHint: (lang) => {
 			inferredLocale = lang;
 			syncDisplayName();
