@@ -82,6 +82,21 @@ node login.js
 - **外壳运行时不等于类型声明**:`useCopyFeedback` 只在类型声明里,运行时没有导出;实际可用的是 `writeClipboard`(以及 `Button`/`Modal`/`StateDot`/若干图标)。以运行时导出为准,先验证再解构。
 - **Web UI 改动建议无头浏览器验证**:临时 `DSH_HOME` + 复制 profile 的 `package.json` 与 `pnpm-workspace.yaml` + `pnpm install --prefer-offline`,起 `dsh --profile web --port <新端口>`,用 Playwright chromium 驱动:跳过首次引导 → 设置 → 目标页面,断言文案与行为;结束后清理临时目录。
 
+## 新订阅商接入检查清单
+
+接入任何新的第三方订阅服务,除了上面的通用验证,还必须遵守以下三条(与 `AGENTS.md` 的功能行为契约一致):
+
+1. **模型列表与思考档位动态获取,不得写死**:不同订阅档位可用的模型与思考深度不同,写死会导致用户升级订阅后部分模型/档位不可用。选择器只展示账户目录接口返回的模型与档位;静态列表仅作离线兜底,绝不与成功的在线结果混用。
+2. **多思考档位按从低到高排序,首项为 Off**(仿照 deepseek 模型的设计);默认档优先取账户目录声明的默认值,其次才用设置项。
+3. **模型声明多模态(图片输入)时必须实测**:以真实账户或等效往返测试覆盖「用户图片输入」与「工具结果图片」两条路径,发现问题必须修复,验证通过前不算接入完成(openai 与 xai 的接入都经过这一步)。
+
+接入 pi-ai 底座新服务商时,xAI 接入留下的经验同样适用:
+
+- 若后端对官方 CLI 做指纹/版本门控(如 cli-chat-proxy 的 HTTP 426),请求需携带对应头部(见 `src/providers/xai.js` 的 `grokProxyHeaders`);
+- pi-ai 的历史 assistant 消息必须携带零 `usage` 与正确 `stopReason`(pi-ai 的上下文估算会无条件读取);
+- 工具结果图片要通过适配器回声到助手消息(见 `src/piai.js` 的 `lastUnEchoedToolResultImages`),否则 UI 不显示;
+- `edit_latest_image` 依赖 `latestConversationImageRef` 扫描 `user/message`、`tool/result` 与 `assistant/message` 三类事件,新服务商不得破坏该行为。
+
 ## 分发(单一仓库直装)
 
 ```sh
