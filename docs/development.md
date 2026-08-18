@@ -104,6 +104,7 @@ node login.js
 | 6 | 思考深度不可选 | M1 曾整体关闭档位;线协议模板的 `thinkingLevelMap` 缺账户目录声明的档,会把 xhigh 悄悄降级为 high | 档位从账户目录声明动态生成;`thinkingLevelMap` 用目录档位覆盖模板;默认档取目录声明 |
 | 7 | 登录弹窗/目录文案写死 ChatGPT,其它服务也显示 ChatGPT | 共享文案未参数化 | 共享文案用 `{name}` 参数化,取当前服务显示名(`src/client.js`) |
 | 8 | 后端拒绝 off 档(HTTP 400 invalid reasoning effort) | 该模型没有关闭档,目录也未声明 | Off 仅在目录声明时展示;目录只声明 high/xhigh 时就只显示这两档(低→高) |
+| 9 | 推送被仓库规则拦截(repository rule violations) | 代码内嵌了 Google OAuth client secret(`GOCSPX-` 触发密钥保护) | 机密一律走环境变量(见 `src/providers/google.js` 的 `GEMINI_OAUTH_CLIENT_SECRET`);公开 client id 可以入库 |
 
 ### 真实账户最小验证配方
 
