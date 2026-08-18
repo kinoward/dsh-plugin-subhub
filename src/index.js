@@ -1828,8 +1828,9 @@ async function requestGeneratedImage(tokenStore, config, auth, prompt, size, qua
 }
 /**
  * Scan the live session log backwards for the most recent image the
- * conversation carries — a user upload or a previously generated image nested
- * in a tool result. Used as the automatic source for image edits.
+ * conversation carries — a user upload, a generated image nested in a tool
+ * result, or an echoed assistant image block. Used as the automatic source
+ * for image edits.
  * @param session - the executing agent's live session, or undefined.
  * @returns the newest image attachment ref, or undefined.
  */
@@ -1838,13 +1839,32 @@ function latestConversationImageRef(session) {
 	if (events === void 0) return void 0;
 	for (let i = events.length - 1; i >= 0; i--) {
 		const event = events[i];
-		if (event?.type !== "user/message") continue;
-		for (const block of event.data?.content ?? []) {
-			if (block?.type === "image" && block.attachment !== void 0) return block.attachment;
-			if (block?.type === "tool-result") {
+		if (event?.type === "user/message") {
+			for (const block of event.data?.content ?? []) {
+				if (block?.type === "image" && block.attachment !== void 0) return block.attachment;
+				if (block?.type === "tool-result") {
+					for (const part of block.content ?? []) {
+						if (part?.type === "image" && part.attachment !== void 0) return part.attachment;
+					}
+				}
+			}
+			continue;
+		}
+		if (event?.type === "tool/result") {
+			// Tool results are surface events carrying the result message; a
+			// generated image lives inside its tool-result blocks.
+			for (const block of event.data?.message?.content ?? []) {
+				if (block?.type !== "tool-result") continue;
 				for (const part of block.content ?? []) {
 					if (part?.type === "image" && part.attachment !== void 0) return part.attachment;
 				}
+			}
+			continue;
+		}
+		if (event?.type === "assistant/message") {
+			// Echoed tool-result images ride as assistant image blocks.
+			for (const block of event.data?.message?.content ?? []) {
+				if (block?.type === "image" && block.attachment !== void 0) return block.attachment;
 			}
 		}
 	}
@@ -2228,4 +2248,4 @@ function apply(ctx, config) {
 	registerXai(ctx, config);
 }
 //#endregion
-export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, name, registerXai, resolveAdapterOptions };
+export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, latestConversationImageRef, name, registerXai, resolveAdapterOptions };
