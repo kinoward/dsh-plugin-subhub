@@ -24,6 +24,7 @@ import { authFilePayload, exchangeAuthorizationCode, pollAuthorizationOnce, requ
 import { registerAnthropic } from "./providers/anthropic.js";
 import { registerGithub } from "./providers/github.js";
 import { registerGoogle } from "./providers/google.js";
+import { registerKimi } from "./providers/kimi.js";
 import { registerXai } from "./providers/xai.js";
 /**
  * Reasoning-effort vocabulary the OpenAI backend advertises per model through
@@ -2252,6 +2253,7 @@ function apply(ctx, config) {
 	registerGithub(ctx, config);
 	registerAnthropic(ctx, config);
 	registerGoogle(ctx, config);
+	registerKimi(ctx, config);
 }
 //#endregion
-export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, latestConversationImageRef, name, registerAnthropic, registerGithub, registerGoogle, registerXai, resolveAdapterOptions };
+export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, latestConversationImageRef, name, registerAnthropic, registerGithub, registerGoogle, registerKimi, registerXai, resolveAdapterOptions };

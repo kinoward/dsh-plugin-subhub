@@ -64,6 +64,8 @@ window.__ModuleLoader__.load({
 			anthropicDesc: "Claude 系列模型,使用 Claude Pro / Max 订阅账户登录。",
 			geminiName: "Gemini 订阅",
 			geminiDesc: "Gemini 系列模型,使用 Google AI Pro / Ultra 订阅账户登录。",
+			kimiName: "Kimi Code 订阅",
+			kimiDesc: "K3 / Kimi For Coding 等模型,使用 Kimi Code 订阅账户登录。",
 			moreComing: "其他服务即将接入,敬请期待。",
 			modalTitle: "登录 {name}",
 			modalDesc: "在浏览器中完成一次性设备授权,登录成功后此页面自动同步。",
@@ -120,6 +122,8 @@ window.__ModuleLoader__.load({
 			anthropicDesc: "Claude models, signed in with a Claude Pro / Max subscription account.",
 			geminiName: "Gemini subscription",
 			geminiDesc: "Gemini models, signed in with a Google AI Pro / Ultra subscription account.",
+			kimiName: "Kimi Code subscription",
+			kimiDesc: "K3, Kimi For Coding and other models, signed in with a Kimi Code subscription account.",
 			moreComing: "More providers are on the way. Stay tuned.",
 			modalTitle: "Sign in to {name}",
 			modalDesc: "Complete a one-time device authorization in the browser; this page syncs automatically after sign-in.",
@@ -314,6 +318,19 @@ window.__ModuleLoader__.load({
 				d: "M12 1.5c1.06 4.5 3.94 7.44 8.5 8.5-4.56 1.06-7.44 4-8.5 8.5-1.06-4.5-3.94-7.44-8.5-8.5 4.56-1.06 7.44-4 8.5-8.5Zm0 17c.8 3.4 2.98 5.6 6.44 6.44-3.46.84-5.64 3.04-6.44 6.44-.8-3.4-2.98-5.6-6.44-6.44 3.46-.84 5.64-3.04 6.44-6.44Z"
 			}));
 		}
+		/** Inline Kimi logomark (planet with ring, drawn in currentColor). */
+		function KimiLogo({ size = 16 }) {
+			return h("svg", {
+				width: size,
+				height: size,
+				viewBox: "0 0 24 24",
+				fill: "none",
+				"aria-hidden": "true"
+			}, [
+				h("circle", { key: "body", cx: 10.5, cy: 12, r: 6, fill: "currentColor" }),
+				h("path", { key: "ring", d: "M4 16.5c2.6 4.2 7.8 5.6 11.7 3.2", stroke: "currentColor", "stroke-width": 2.4, "stroke-linecap": "round", fill: "none" })
+			]);
+		}
 		/** Shell-style copy button with one-second "copied" feedback. */
 		function CopyButton({ t, text }) {
 			const [copied, setCopied] = React.useState(false);
@@ -480,7 +497,8 @@ window.__ModuleLoader__.load({
 				{ names: [zh.xaiName, en.xaiName], apiBase: `${API}/xai` },
 				{ names: [zh.githubName, en.githubName], apiBase: `${API}/github` },
 				{ names: [zh.anthropicName, en.anthropicName], apiBase: `${API}/anthropic` },
-				{ names: [zh.geminiName, en.geminiName], apiBase: `${API}/google` }
+				{ names: [zh.geminiName, en.geminiName], apiBase: `${API}/google` },
+				{ names: [zh.kimiName, en.kimiName], apiBase: `${API}/kimi` }
 			];
 			const matchProvider = (name) => SUBSCRIPTION_ROWS.find((entry) => entry.names.includes(name));
 			const CHEVRON_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6 L8 10 L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -956,6 +974,13 @@ window.__ModuleLoader__.load({
 					descKey: "geminiDesc",
 					logo: h(GeminiLogo, { size: 16 }),
 					apiBase: `${API}/google`
+				},
+				{
+					id: "dsh-plugin-subhub-kimi",
+					nameKey: "kimiName",
+					descKey: "kimiDesc",
+					logo: h(KimiLogo, { size: 16 }),
+					apiBase: `${API}/kimi`
 				}
 			];
 			return h("div", { className: "dsh-plugin-sub-root" }, [

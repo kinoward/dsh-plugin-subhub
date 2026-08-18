@@ -1295,7 +1295,7 @@ function registerSubscriptionProvider(ctx, config, spec) {
 		// A spec-supplied login (e.g. Google's hand-rolled loopback OAuth)
 		// replaces pi-ai's bundled flow; its credential is persisted by the
 		// controller into the same plugin-owned file.
-		loginFn: spec.login !== void 0 ? spec.login : (interaction) => models.login(piProvider.id, "oauth", interaction),
+		loginFn: spec.login !== void 0 ? spec.login : (interaction) => piModels.login(piProvider.id, "oauth", interaction),
 		customLogin: spec.login !== void 0,
 		onLanguageHint: (lang) => {
 			inferredLocale = lang;
