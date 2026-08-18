@@ -277,8 +277,10 @@ function createInteraction(state, signal, promptHandler) {
 			// Some flows ask a question before showing public facts (GitHub
 			// Copilot asks for an Enterprise domain; loopback flows offer a
 			// manual code paste). The spec supplies the answer; flows without
-			// one keep the honest refusal.
-			if (promptHandler !== void 0) return await promptHandler(input);
+			// one keep the honest refusal. The controller signal travels
+			// along so a hanging prompt (e.g. waiting for the loopback
+			// callback) still aborts with the login.
+			if (promptHandler !== void 0) return await promptHandler(input, signal);
 			throw new Error("interactive prompts are not available in the web login flow");
 		}
 	};

@@ -60,6 +60,8 @@ window.__ModuleLoader__.load({
 			xaiDesc: "Grok 系列模型,使用 SuperGrok 或 X Premium+ 账户登录。",
 			githubName: "GitHub Copilot",
 			githubDesc: "Copilot 订阅内的 GPT / Claude / Gemini 等模型,使用 GitHub 账户登录。",
+			anthropicName: "Claude 订阅",
+			anthropicDesc: "Claude 系列模型,使用 Claude Pro / Max 订阅账户登录。",
 			moreComing: "其他服务即将接入,敬请期待。",
 			modalTitle: "登录 {name}",
 			modalDesc: "在浏览器中完成一次性设备授权,登录成功后此页面自动同步。",
@@ -112,6 +114,8 @@ window.__ModuleLoader__.load({
 			xaiDesc: "Grok models, signed in with a SuperGrok or X Premium+ account.",
 			githubName: "GitHub Copilot",
 			githubDesc: "GPT, Claude, Gemini and other models in your Copilot subscription, signed in with a GitHub account.",
+			anthropicName: "Claude subscription",
+			anthropicDesc: "Claude models, signed in with a Claude Pro / Max subscription account.",
 			moreComing: "More providers are on the way. Stay tuned.",
 			modalTitle: "Sign in to {name}",
 			modalDesc: "Complete a one-time device authorization in the browser; this page syncs automatically after sign-in.",
@@ -269,6 +273,30 @@ window.__ModuleLoader__.load({
 			}, h("path", {
 				d: "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
 			}));
+		}
+		/** Inline Anthropic logomark (simplified starburst, drawn in currentColor). */
+		function AnthropicLogo({ size = 16 }) {
+			const rays = [];
+			for (let i = 0; i < 12; i++) {
+				const angle = (Math.PI * 2 * i) / 12;
+				rays.push(h("line", {
+					key: i,
+					x1: String(8 + Math.cos(angle) * 2.6),
+					y1: String(8 + Math.sin(angle) * 2.6),
+					x2: String(8 + Math.cos(angle) * 7),
+					y2: String(8 + Math.sin(angle) * 7),
+					stroke: "currentColor",
+					"stroke-width": "1.6",
+					"stroke-linecap": "round"
+				}));
+			}
+			return h("svg", {
+				width: size,
+				height: size,
+				viewBox: "0 0 16 16",
+				fill: "none",
+				"aria-hidden": "true"
+			}, rays);
 		}
 		/** Shell-style copy button with one-second "copied" feedback. */
 		function CopyButton({ t, text }) {
@@ -434,7 +462,8 @@ window.__ModuleLoader__.load({
 			const SUBSCRIPTION_ROWS = [
 				{ names: [zh.openaiName, en.openaiName], apiBase: API },
 				{ names: [zh.xaiName, en.xaiName], apiBase: `${API}/xai` },
-				{ names: [zh.githubName, en.githubName], apiBase: `${API}/github` }
+				{ names: [zh.githubName, en.githubName], apiBase: `${API}/github` },
+				{ names: [zh.anthropicName, en.anthropicName], apiBase: `${API}/anthropic` }
 			];
 			const matchProvider = (name) => SUBSCRIPTION_ROWS.find((entry) => entry.names.includes(name));
 			const CHEVRON_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6 L8 10 L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -896,6 +925,13 @@ window.__ModuleLoader__.load({
 					descKey: "githubDesc",
 					logo: h(GitHubLogo, { size: 16 }),
 					apiBase: `${API}/github`
+				},
+				{
+					id: "dsh-plugin-subhub-anthropic",
+					nameKey: "anthropicName",
+					descKey: "anthropicDesc",
+					logo: h(AnthropicLogo, { size: 16 }),
+					apiBase: `${API}/anthropic`
 				}
 			];
 			return h("div", { className: "dsh-plugin-sub-root" }, [

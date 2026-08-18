@@ -21,6 +21,7 @@ import { MAX_TIMER_DELAY_MS, idleWatchdog, timeoutOf } from "@deepseek-ai/dsh-ti
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { authFilePayload, exchangeAuthorizationCode, pollAuthorizationOnce, requestUserCode } from "./device-flow.js";
+import { registerAnthropic } from "./providers/anthropic.js";
 import { registerGithub } from "./providers/github.js";
 import { registerXai } from "./providers/xai.js";
 /**
@@ -2248,6 +2249,7 @@ function apply(ctx, config) {
 	// registration triggers the OpenAI provider uses.
 	registerXai(ctx, config);
 	registerGithub(ctx, config);
+	registerAnthropic(ctx, config);
 }
 //#endregion
-export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, latestConversationImageRef, name, registerGithub, registerXai, resolveAdapterOptions };
+export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, latestConversationImageRef, name, registerAnthropic, registerGithub, registerXai, resolveAdapterOptions };
