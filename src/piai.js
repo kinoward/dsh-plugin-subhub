@@ -815,6 +815,39 @@ async function* toStreamChunks(events, contextWindow) {
 //#endregion
 //#region adapter: pi-ai-backed LlmAdapter for one subscription provider
 /**
+ * Tool-result images that the conversation UI has not shown yet. The shell's
+ * tool-result cards render text only and drop image blocks, so an image a
+ * tool returned (generate_image, read_image) is visible to the model but not
+ * to the user. The adapter echoes those images into the next assistant
+ * message — whose renderer does display images — tracking what has already
+ * been echoed through the attachment ids present in assistant history.
+ * @param messages - the harness conversation, in order.
+ * @returns attachment refs (from the most recent tool result that still has
+ *   an un-echoed image), in block order.
+ */
+function lastUnEchoedToolResultImages(messages) {
+	const echoed = new Set();
+	for (const message of messages ?? []) {
+		if (message.role !== "assistant") continue;
+		for (const block of message.content ?? []) {
+			if (block.type === "image" && block.attachment?.attachmentId !== void 0) echoed.add(block.attachment.attachmentId);
+		}
+	}
+	for (let i = (messages ?? []).length - 1; i >= 0; i--) {
+		const message = messages[i];
+		if (message.role === "assistant" || message.role === "system") continue;
+		const refs = [];
+		for (const block of message.content ?? []) {
+			if (block.type !== "tool-result") continue;
+			for (const part of block.content ?? []) {
+				if (part.type === "image" && part.attachment?.attachmentId !== void 0 && !echoed.has(part.attachment.attachmentId)) refs.push(part.attachment);
+			}
+		}
+		if (refs.length > 0) return refs;
+	}
+	return [];
+}
+/**
  * One pi-ai-backed subscription provider route. The adapter keeps pi-ai's
  * static model catalog as its capability source (context windows, input
  * modalities, thinking levels) while the live account catalog — fetched by
@@ -916,6 +949,31 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 		const attachments = containsImage ? this.config.resolveAttachments?.() : void 0;
 		if (containsImage && attachments === void 0) throw new LlmError("pi-ai image input requires the harness attachment store, which is not available in this profile.", "UNSUPPORTED_CONTENT");
 		const context = await toPiContext(options, attachments, options.signal);
+		// The shell renders tool-result cards as text only, so images a tool
+		// returned (generate_image, read_image) never reach the user's eyes
+		// through the card. Echo un-echoed tool-result images as leading
+		// assistant image blocks, which the conversation renderer displays —
+		// the same compensation the OpenAI adapter performs. Skipped for
+		// tool-less calls (the session-title request) so a title stream never
+		// carries an image. The echoed blocks occupy the first indexes; the
+		// model stream is re-indexed past them.
+		const echoRefs = Array.isArray(options.tools) && options.tools.length > 0 ? lastUnEchoedToolResultImages(options.messages) : [];
+		const echoOffset = echoRefs.length;
+		for (let index = 0; index < echoRefs.length; index++) {
+			yield {
+				type: "block-start",
+				index,
+				blockType: "image"
+			};
+			yield {
+				type: "block-end",
+				index,
+				block: {
+					type: "image",
+					attachment: echoRefs[index]
+				}
+			};
+		}
 		const consumer = new AbortController();
 		const watchdog = idleWatchdog(options.signal === void 0 ? consumer.signal : AbortSignal.any([options.signal, consumer.signal]), connection.streamIdleTimeoutMs, "LLM_STREAM_IDLE_TIMEOUT");
 		const effort = options.reasoningEffort !== void 0 && options.reasoningEffort !== "off" ? options.reasoningEffort : void 0;
@@ -934,7 +992,8 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 					exhausted = true;
 					return;
 				}
-				yield result.value;
+				const chunk = result.value;
+				yield echoOffset > 0 && typeof chunk.index === "number" ? { ...chunk, index: chunk.index + echoOffset } : chunk;
 			}
 		} catch (error) {
 			if (timeoutOf(watchdog.signal, "LLM_STREAM_IDLE_TIMEOUT") !== void 0) throw new LlmError(`${this.config.provider}: stream idle timeout after ${connection.streamIdleTimeoutMs}ms`, "TIMEOUT", { cause: error });
@@ -1190,4 +1249,4 @@ function registerSubscriptionProvider(ctx, config, spec) {
 	};
 }
 //#endregion
-export { DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS_CACHE_TTL_MS, DEFAULT_STREAM_IDLE_TIMEOUT_MS, FileCredentialStore, LOGIN_API_PATH, PiAiSubscriptionAdapter, classifyPiAiError, createPiAiLoginController, mapStopReason, registerSubscriptionProvider, toPiContext, toStreamChunks };
+export { DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS_CACHE_TTL_MS, DEFAULT_STREAM_IDLE_TIMEOUT_MS, FileCredentialStore, LOGIN_API_PATH, PiAiSubscriptionAdapter, classifyPiAiError, createPiAiLoginController, lastUnEchoedToolResultImages, mapStopReason, registerSubscriptionProvider, toPiContext, toStreamChunks };
