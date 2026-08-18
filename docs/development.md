@@ -82,20 +82,38 @@ node login.js
 - **外壳运行时不等于类型声明**:`useCopyFeedback` 只在类型声明里,运行时没有导出;实际可用的是 `writeClipboard`(以及 `Button`/`Modal`/`StateDot`/若干图标)。以运行时导出为准,先验证再解构。
 - **Web UI 改动建议无头浏览器验证**:临时 `DSH_HOME` + 复制 profile 的 `package.json` 与 `pnpm-workspace.yaml` + `pnpm install --prefer-offline`,起 `dsh --profile web --port <新端口>`,用 Playwright chromium 驱动:跳过首次引导 → 设置 → 目标页面,断言文案与行为;结束后清理临时目录。
 
-## 新订阅商接入检查清单
+## 新订阅商接入:规范与实战速查
 
-接入任何新的第三方订阅服务,除了上面的通用验证,还必须遵守以下三条(与 `AGENTS.md` 的功能行为契约一致):
+接入任何新的第三方订阅服务,除上面的通用验证外,必须遵守三条硬性规则(完整约束见 `AGENTS.md` 的「新订阅商接入规范」):
 
-1. **模型列表与思考档位动态获取,不得写死**:不同订阅档位可用的模型与思考深度不同,写死会导致用户升级订阅后部分模型/档位不可用。选择器只展示账户目录接口返回的模型与档位;静态列表仅作离线兜底,绝不与成功的在线结果混用。
-2. **多思考档位按从低到高排序,首项为 Off**(仿照 deepseek 模型的设计);默认档优先取账户目录声明的默认值,其次才用设置项。
-3. **模型声明多模态(图片输入)时必须实测**:以真实账户或等效往返测试覆盖「用户图片输入」与「工具结果图片」两条路径,发现问题必须修复,验证通过前不算接入完成(openai 与 xai 的接入都经过这一步)。
+1. **模型列表与思考档位动态获取,不得写死**——不同订阅档位可用的模型与思考深度不同,写死会导致用户升级订阅后部分模型/档位不可用;选择器只展示账户目录接口返回的模型与档位,静态列表仅作离线兜底,绝不与成功的在线结果混用。
+2. **多思考档位按从低到高排序,首项为 Off**(仿照 deepseek 模型的设计);Off 仅在账户目录声明关闭档时展示——若后端拒绝显式 off(如 xai 实测 HTTP 400 invalid reasoning effort),只展示目录声明的档位;默认档优先取目录声明的默认值,其次才用设置项。
+3. **声明多模态(图片输入)的模型必须实测**:以真实账户或等效往返测试覆盖「用户图片输入」与「工具结果图片」两条路径,发现问题必须修复,验证通过前不算接入完成(openai 与 xai 的接入都经过这一步)。
 
-接入 pi-ai 底座新服务商时,xAI 接入留下的经验同样适用:
+### xAI 接入实战:问题与解法速查
 
-- 若后端对官方 CLI 做指纹/版本门控(如 cli-chat-proxy 的 HTTP 426),请求需携带对应头部(见 `src/providers/xai.js` 的 `grokProxyHeaders`);
-- pi-ai 的历史 assistant 消息必须携带零 `usage` 与正确 `stopReason`(pi-ai 的上下文估算会无条件读取);
-- 工具结果图片要通过适配器回声到助手消息(见 `src/piai.js` 的 `lastUnEchoedToolResultImages`),否则 UI 不显示;
-- `edit_latest_image` 依赖 `latestConversationImageRef` 扫描 `user/message`、`tool/result` 与 `assistant/message` 三类事件,新服务商不得破坏该行为。
+按接入过程的时间顺序记录,后续服务商遇到同类症状可直接对照:
+
+| # | 问题/现象 | 根因 | 解法(代码位置) |
+|---|---|---|---|
+| 1 | 所有订阅请求 HTTP 426,提示 Grok CLI 版本过旧 | cli-chat-proxy 对官方 CLI 做版本门控与代理鉴权,缺 `x-grok-client-version` 等指纹头 | 每次请求携带指纹头集合(标识/版本/模式/`X-XAI-Token-Auth`/`x-authenticateresponse`/UA),见 `src/providers/xai.js` 的 `grokProxyHeaders`;版本随上游调高 |
+| 2 | HTTP 402 提示无额度/无订阅,但账户订阅正常 | 请求了账户目录之外的模型,且走了错误协议(chat completions vs responses) | 在线目录用 `/models-v2` 拉取账户真实模型;目录 `api_backend` 决定线协议模板(见 `src/piai.js` 的 `piModelFor`) |
+| 3 | 第二轮请求崩溃 `Cannot read properties of undefined (reading 'totalTokens')` | pi-ai 的上下文估算无条件读取历史 assistant 消息的 `usage` | 历史 assistant 消息必须携带零 `usage` 与正确 `stopReason`(`src/piai.js` 的 `toPiAssistant`/`emptyPiUsage`) |
+| 4 | 图片已生成并入库,但 UI 不显示 | 外壳的工具结果卡片只渲染文字、丢弃图片块 | 适配器把未回显的工具结果图片作为助手消息前导图片块回声,并按回声数偏移后续块 index(`src/piai.js` 的 `lastUnEchoedToolResultImages` + `stream` 回声) |
+| 5 | `edit_latest_image` 报「会话中还没有图片」 | `latestConversationImageRef` 只扫 `user/message` 事件,漏掉 `tool/result` 与 `assistant/message` | 扫描扩展到三类表面事件、自后向前取最新(`src/index.js`) |
+| 6 | 思考深度不可选 | M1 曾整体关闭档位;线协议模板的 `thinkingLevelMap` 缺账户目录声明的档,会把 xhigh 悄悄降级为 high | 档位从账户目录声明动态生成;`thinkingLevelMap` 用目录档位覆盖模板;默认档取目录声明 |
+| 7 | 登录弹窗/目录文案写死 ChatGPT,其它服务也显示 ChatGPT | 共享文案未参数化 | 共享文案用 `{name}` 参数化,取当前服务显示名(`src/client.js`) |
+| 8 | 后端拒绝 off 档(HTTP 400 invalid reasoning effort) | 该模型没有关闭档,目录也未声明 | Off 仅在目录声明时展示;目录只声明 high/xhigh 时就只显示这两档(低→高) |
+
+### 真实账户最小验证配方
+
+无 GUI 环境或自动化验证时,用插件自己的组件走同一条请求路径(以 xai 为例,见各次修复的 `.tmp-repro/verify-*.mjs`):
+
+1. `FileCredentialStore` 指向真实凭据文件 → `createModels({ credentials: store })` → `setProvider(xaiProvider())`;
+2. 克隆 pi-ai 模型模板,覆盖 `baseUrl`、`headers`(`grokProxyHeaders()`)、`thinkingLevelMap` 与在线目录字段——与适配器 `piModelFor` 的产物一致;
+3. `models.streamSimple(...)` 发最小请求(如「Reply with exactly one word: ok」),迭代事件断言 `done`/文本/用量,或读取 `error` 事件的 `errorMessage` 定位后端拒绝原因。
+
+验证结束必须删除 `.tmp-repro/`;真实凭据只读不复制。
 
 ## 分发(单一仓库直装)
 
