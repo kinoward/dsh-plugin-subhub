@@ -814,6 +814,16 @@ async function* toStreamChunks(events, contextWindow) {
 }
 //#endregion
 //#region adapter: pi-ai-backed LlmAdapter for one subscription provider
+/** Escalation order used to sort selectable reasoning levels low to high. */
+const LEVEL_RANK = {
+	off: 0,
+	minimal: 1,
+	low: 2,
+	medium: 3,
+	high: 4,
+	xhigh: 5,
+	max: 6
+};
 /**
  * Tool-result images that the conversation UI has not shown yet. The shell's
  * tool-result cards render text only and drop image blocks, so an image a
@@ -902,9 +912,11 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 		return clone(template, modelId, modelId);
 	}
 	/**
-	 * Reasoning efforts for one model. The account's live catalog entry wins
-	 * when it declares levels (the harness picker must show exactly what the
-	 * backend accepts); otherwise pi-ai's static thinking levels apply.
+	 * Reasoning efforts for one model, sorted low to high with Off first
+	 * when the backend offers an off/disabled mode (mirroring the deepseek
+	 * design). The account's live catalog entry wins when it declares levels
+	 * — the picker must show exactly what the backend accepts, so Off is
+	 * only listed when the catalog itself declares it.
 	 */
 	effortsFor(modelId) {
 		if (this.config.reasoningEffort === false) return [];
@@ -913,7 +925,7 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 			return live.reasoningEfforts.map((effort) => ({
 				id: ReasoningEffortId(effort.id),
 				name: effort.name ?? `${effort.id.charAt(0).toUpperCase()}${effort.id.slice(1)}`
-			}));
+			})).sort((left, right) => (LEVEL_RANK[left.id] ?? 99) - (LEVEL_RANK[right.id] ?? 99));
 		}
 		const model = this.piModelFor(modelId);
 		return getSupportedThinkingLevels(model).map((level) => ({
