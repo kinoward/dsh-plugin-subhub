@@ -466,12 +466,30 @@ function createPiAiLoginController({ slug, providerId, models, store, filePath, 
 }
 //#endregion
 //#region context: harness request history -> pi-ai Context
+/** Construct the zero usage value pi-ai expects on assistant history. */
+function emptyPiUsage() {
+	return {
+		input: 0,
+		output: 0,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: 0,
+		cost: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			total: 0
+		}
+	};
+}
 /**
  * Convert one harness assistant message into pi-ai history. Text and tool
  * calls map one to one; reasoning blocks become pi-ai thinking blocks;
  * assistant-produced images cannot be replayed inside an assistant message,
  * so they are re-homed as a following user image message (the same approach
- * the OpenAI adapter uses).
+ * the OpenAI adapter uses). The zero usage and stopReason are required:
+ * pi-ai's context-token estimation reads `assistant.usage` unconditionally.
  */
 function toPiAssistant(message) {
 	const content = [];
@@ -488,6 +506,8 @@ function toPiAssistant(message) {
 	return {
 		role: "assistant",
 		content,
+		usage: emptyPiUsage(),
+		stopReason: content.some((piece) => piece.type === "toolCall") ? "toolUse" : "stop",
 		timestamp: 0
 	};
 }
