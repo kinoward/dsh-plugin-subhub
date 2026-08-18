@@ -873,12 +873,21 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 		const base = this.config.piModels.getModel(this.config.piProviderId, modelId);
 		const live = this.config.getLiveEntry?.(modelId);
 		const headers = this.config.modelHeaders?.() ?? {};
+		// The account's catalog declares per-model reasoning levels; teach the
+		// template's thinking-level map those levels so pi-ai's wire clamping
+		// honors them instead of silently downgrading (e.g. xhigh -> high).
+		const liveLevels = Array.isArray(live?.reasoningEfforts) && live.reasoningEfforts.length > 0 ? live.reasoningEfforts : void 0;
+		const thinkingLevelMap = liveLevels === void 0 ? void 0 : {
+			...((base ?? {}).thinkingLevelMap ?? {}),
+			...Object.fromEntries(liveLevels.map((effort) => [effort.id, effort.id]))
+		};
 		const clone = (model, id, name) => ({
 			...model,
 			id,
 			name,
 			baseUrl: this.config.effectiveBaseURL(this.config.options()),
 			...Number.isInteger(live?.contextWindow) ? { contextWindow: live.contextWindow } : {},
+			...thinkingLevelMap !== void 0 ? { thinkingLevelMap } : {},
 			...(Object.keys(headers).length > 0 ? { headers: { ...(model.headers ?? {}), ...headers } } : {})
 		});
 		if (base !== void 0) return clone(base, modelId, base.name ?? modelId);
@@ -892,14 +901,34 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 		if (template === void 0) throw new LlmError(`${this.config.provider}: no pi-ai model template for "${modelId}"`, "UNKNOWN_MODEL");
 		return clone(template, modelId, modelId);
 	}
-	/** Reasoning efforts pi-ai would actually put on the wire for this model. */
+	/**
+	 * Reasoning efforts for one model. The account's live catalog entry wins
+	 * when it declares levels (the harness picker must show exactly what the
+	 * backend accepts); otherwise pi-ai's static thinking levels apply.
+	 */
 	effortsFor(modelId) {
 		if (this.config.reasoningEffort === false) return [];
+		const live = this.config.getLiveEntry?.(modelId);
+		if (Array.isArray(live?.reasoningEfforts) && live.reasoningEfforts.length > 0) {
+			return live.reasoningEfforts.map((effort) => ({
+				id: ReasoningEffortId(effort.id),
+				name: effort.name ?? `${effort.id.charAt(0).toUpperCase()}${effort.id.slice(1)}`
+			}));
+		}
 		const model = this.piModelFor(modelId);
 		return getSupportedThinkingLevels(model).map((level) => ({
 			id: ReasoningEffortId(level),
 			name: `${level.charAt(0).toUpperCase()}${level.slice(1)}`
 		}));
+	}
+	/** The catalog-declared default effort for one model, when any. */
+	defaultEffortFor(modelId) {
+		const live = this.config.getLiveEntry?.(modelId);
+		if (Array.isArray(live?.reasoningEfforts)) {
+			const declared = live.reasoningEfforts.find((effort) => effort.default === true);
+			if (typeof declared?.id === "string") return ReasoningEffortId(declared.id);
+		}
+		return void 0;
 	}
 	/** Harness model descriptor for one catalog id. */
 	descriptor(modelId, entry) {
@@ -925,6 +954,8 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 			const contextWindow = entry?.contextWindow ?? config.defaultContextWindow;
 			const efforts = this.effortsFor(model);
 			const configuredDefault = typeof config.defaultReasoningEffort === "string" && efforts.some((effort) => effort.id === config.defaultReasoningEffort) ? ReasoningEffortId(config.defaultReasoningEffort) : void 0;
+			const catalogDefault = this.defaultEffortFor(model);
+			const defaultEffort = configuredDefault ?? (catalogDefault !== void 0 && efforts.some((effort) => effort.id === catalogDefault) ? catalogDefault : void 0);
 			return {
 				provider,
 				id: model,
@@ -936,7 +967,7 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 				},
 				...efforts.length === 0 ? {} : { reasoning: {
 					efforts,
-					...configuredDefault !== void 0 ? { defaultEffort: configuredDefault } : {}
+					...defaultEffort !== void 0 ? { defaultEffort } : {}
 				} }
 			};
 		});

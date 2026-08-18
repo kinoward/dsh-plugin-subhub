@@ -26,6 +26,17 @@ const NS = settingsNamespace("dsh-plugin-subhub-xai");
  */
 const SUBSCRIPTION_BASE_URL = "https://cli-chat-proxy.grok.com/v1";
 const API_BASE_URL = "https://api.x.ai/v1";
+/** Reasoning-level vocabulary the backend accepts; the catalog declares them per model. */
+const EFFORT_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+const EFFORT_DISPLAY_NAMES = {
+	off: "Off",
+	minimal: "Minimal",
+	low: "Low",
+	medium: "Medium",
+	high: "High",
+	xhigh: "X-High",
+	max: "Max"
+};
 /**
  * The cli-chat-proxy backend gates requests on the official Grok CLI's
  * client fingerprint: `x-grok-client-version` (HTTP 426 when absent or too
@@ -53,6 +64,7 @@ const Config = z.object({
 	apiBaseURL: z.string(),
 	defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
 	modelsCacheTtlMs: z.number().min(1).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_MODELS_CACHE_TTL_MS),
+	defaultReasoningEffort: z.union(["off", "minimal", "low", "medium", "high", "xhigh", "max"]),
 	streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
 	retryPolicy: RetryPolicySchema
 });
@@ -63,6 +75,7 @@ const Config = z.object({
  */
 function resolveAdapterOptions(config) {
 	if (config.defaultContextWindow !== void 0 && (!Number.isInteger(config.defaultContextWindow) || config.defaultContextWindow <= 0)) throw new Error("xai: defaultContextWindow must be a positive integer");
+	if (config.defaultReasoningEffort !== void 0 && !EFFORT_LEVELS.has(config.defaultReasoningEffort)) throw new Error(`xai: defaultReasoningEffort must be one of ${[...EFFORT_LEVELS].join(", ")}`);
 	const streamIdleTimeoutMs = config.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS;
 	if (!Number.isFinite(streamIdleTimeoutMs) || streamIdleTimeoutMs <= 0 || streamIdleTimeoutMs > MAX_TIMER_DELAY_MS) throw new Error(`xai: streamIdleTimeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`);
 	const modelsCacheTtlMs = config.modelsCacheTtlMs ?? DEFAULT_MODELS_CACHE_TTL_MS;
@@ -73,6 +86,7 @@ function resolveAdapterOptions(config) {
 		apiBaseURL: config.apiBaseURL,
 		defaultContextWindow: config.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
 		modelsCacheTtlMs,
+		defaultReasoningEffort: config.defaultReasoningEffort,
 		streamIdleTimeoutMs,
 		retryPolicy: resolveRetryPolicy(config.retryPolicy, "xai: retryPolicy")
 	};
@@ -114,16 +128,26 @@ async function liveCatalog(config, apiKey, _piProviderId, _piModels) {
 	if (!response.ok) throw new Error(`xai: model catalog request failed (HTTP ${response.status})`);
 	const body = await response.json();
 	const raw = Array.isArray(body?.models) ? body.models : Array.isArray(body?.data) ? body.data : [];
-	return raw.filter((entry) => typeof entry?.id === "string").map((entry) => ({
-		id: entry.id,
-		name: typeof entry.display_name === "string" && entry.display_name.length > 0 ? entry.display_name : typeof entry.name === "string" && entry.name.length > 0 ? entry.name : entry.id,
-		// The proxy serves accounts whose models speak the Responses API
-		// (`api_backend: "responses"`, e.g. grok-4.6); unknown live ids are
-		// dispatched through the matching pi-ai wire protocol.
-		api: entry.api_backend === "responses" ? "openai-responses" : "openai-completions",
-		...Number.isInteger(entry.context_window) && entry.context_window > 0 ? { contextWindow: entry.context_window } : {},
-		...(Array.isArray(entry.input_modalities) ? { inputModalities: entry.input_modalities.filter((modality) => modality === "text" || modality === "image") } : { inputModalities: ["text", "image"] })
-	}));
+	return raw.filter((entry) => typeof entry?.id === "string").map((entry) => {
+		const efforts = Array.isArray(entry.reasoning_efforts) ? entry.reasoning_efforts.filter((effort) => typeof effort?.id === "string" && EFFORT_LEVELS.has(effort.id)).map((effort) => ({
+			id: effort.id,
+			name: EFFORT_DISPLAY_NAMES[effort.id] ?? effort.id,
+			...effort.default === true ? { default: true } : {}
+		})) : [];
+		return {
+			id: entry.id,
+			name: typeof entry.display_name === "string" && entry.display_name.length > 0 ? entry.display_name : typeof entry.name === "string" && entry.name.length > 0 ? entry.name : entry.id,
+			// The proxy serves accounts whose models speak the Responses API
+			// (`api_backend: "responses"`, e.g. grok-4.6); unknown live ids are
+			// dispatched through the matching pi-ai wire protocol.
+			api: entry.api_backend === "responses" ? "openai-responses" : "openai-completions",
+			// Per-model reasoning levels come from the account's own catalog;
+			// the picker must show exactly what the backend accepts.
+			...entry.supports_reasoning_effort !== false && efforts.length > 0 ? { reasoningEfforts: efforts } : {},
+			...Number.isInteger(entry.context_window) && entry.context_window > 0 ? { contextWindow: entry.context_window } : {},
+			...(Array.isArray(entry.input_modalities) ? { inputModalities: entry.input_modalities.filter((modality) => modality === "text" || modality === "image") } : { inputModalities: ["text", "image"] })
+		};
+	});
 }
 /**
  * Register the `dsh-plugin-subhub-xai` provider route through the shared
@@ -145,10 +169,10 @@ function registerXai(ctx, config) {
 		// The cli-chat-proxy version gate (HTTP 426) and auth middleware read
 		// these headers off every subscription request.
 		modelHeaders: grokProxyHeaders,
-		// Reasoning effort stays off until a real account confirms the
-		// subscription proxy accepts (and the account quota honors) the
-		// reasoning_effort parameter pi-ai would send.
-		reasoningEffort: false,
+		// Reasoning levels come from the account's own catalog
+		// (grok-4.6 declares xhigh/high); the picker shows exactly those and
+		// pi-ai puts the selected level on the wire.
+		reasoningEffort: true,
 		displayName: (lang) => lang === "en" ? "xAI Grok subscription" : "xAI Grok 订阅"
 	});
 }
