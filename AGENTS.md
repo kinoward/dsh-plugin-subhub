@@ -83,6 +83,7 @@ src/piai.js                     新增订阅商的 pi-ai 通用底座(凭据文�
 src/providers/xai.js            xAI Grok 订阅规格(新服务商样板:常量/settings schema/在线与兜底模型目录/注册)
 src/providers/github.js         GitHub Copilot 订阅规格(设备码登录与账户模型目录,在线目录按 policy 过滤)
 src/providers/anthropic.js      Claude 订阅规格(回环 PKCE 登录;无账户目录接口,官方已知模型清单为目录)
+src/providers/google.js         Gemini 订阅规格(自写回环 PKCE 登录与 token 刷新;Generative Language API 在线目录)
 ```
 
 按需读取的最小集:

@@ -299,7 +299,7 @@ function loginFailureToStatus(error) {
  * owning plugin can (un)register the provider route, and `onLanguageHint`
  * runs when a request reveals the harness UI language.
  */
-function createPiAiLoginController({ slug, providerId, models, store, filePath, logger, onAuthChanged, listCatalog, onLanguageHint, promptHandler }) {
+function createPiAiLoginController({ slug, providerId, models, store, filePath, logger, onAuthChanged, listCatalog, onLanguageHint, promptHandler, loginFn, customLogin }) {
 	let pending;
 	// Last login state observed by the status route; drives the polling
 	// self-heal below.
@@ -330,7 +330,11 @@ function createPiAiLoginController({ slug, providerId, models, store, filePath, 
 		state.factsReady = new Promise((resolve) => {
 			state.resolveFacts = resolve;
 		});
-		state.promise = models.login(providerId, "oauth", createInteraction(state, controller.signal, promptHandler)).then(() => {
+		state.promise = loginFn(createInteraction(state, controller.signal, promptHandler)).then(async (credential) => {
+			// pi-ai's own login persists through the store; a spec-supplied
+			// login (e.g. Google's hand-rolled loopback OAuth) returns the
+			// credential and the controller persists it the same way.
+			if (customLogin && credential !== void 0) await store.modify(providerId, async () => credential);
 			state.result = { status: "success" };
 		}).catch((error) => {
 			state.result = loginFailureToStatus(error);
@@ -1027,10 +1031,15 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 		const consumer = new AbortController();
 		const watchdog = idleWatchdog(options.signal === void 0 ? consumer.signal : AbortSignal.any([options.signal, consumer.signal]), connection.streamIdleTimeoutMs, "LLM_STREAM_IDLE_TIMEOUT");
 		const effort = options.reasoningEffort !== void 0 && options.reasoningEffort !== "off" ? options.reasoningEffort : void 0;
+		// Hand-rolled OAuth providers (Google) resolve their own access token
+		// and hand it to pi-ai as the request's apiKey override; providers
+		// riding pi-ai's bundled OAuth resolve through the Models store.
+		const apiKey = this.config.resolveApiKey !== void 0 ? await this.config.resolveApiKey() : void 0;
 		const iterator = toStreamChunks(this.config.piModels.streamSimple(model, context, {
 			...effort !== void 0 && this.config.reasoningEffort !== false ? { reasoning: effort } : {},
 			...options.temperature !== void 0 ? { temperature: options.temperature } : {},
 			...options.maxTokens !== void 0 ? { maxTokens: options.maxTokens } : {},
+			...apiKey !== void 0 ? { apiKey } : {},
 			signal: watchdog.signal,
 			headers: attributionHeaders()
 		}), model.contextWindow)[Symbol.asyncIterator]();
@@ -1073,7 +1082,7 @@ const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 3e5;
  * endpoint; failures always fall back to the static list, which is never
  * merged into a successful online result.
  */
-function createCatalogCache({ provider, logger, options, getAuth, liveCatalog, fallbackDescriptors, piProviderId, piModels }) {
+function createCatalogCache({ provider, logger, options, getAuth, getApiKey, liveCatalog, fallbackDescriptors, piProviderId, piModels }) {
 	const cache = {
 		at: 0,
 		key: void 0,
@@ -1087,8 +1096,9 @@ function createCatalogCache({ provider, logger, options, getAuth, liveCatalog, f
 		const config = options();
 		let apiKey;
 		try {
-			const auth = await getAuth();
-			apiKey = auth?.auth?.apiKey;
+			// A spec-supplied resolver (hand-rolled OAuth providers such as
+			// Google) wins; otherwise pi-ai's own auth resolution applies.
+			apiKey = typeof getApiKey === "function" ? await getApiKey() : (await getAuth())?.auth?.apiKey;
 		} catch {
 			return fallbackDescriptors;
 		}
@@ -1181,11 +1191,13 @@ function registerSubscriptionProvider(ctx, config, spec) {
 	ctx.inject(["attachments"], (attachmentCtx) => {
 		attachments = attachmentCtx.attachments;
 	});
+	const resolveApiKey = spec.resolveApiKey !== void 0 ? () => spec.resolveApiKey({ store, providerId: piProvider.id }) : void 0;
 	const catalogCache = createCatalogCache({
 		provider: spec.id,
 		logger: ctx.logger,
 		options,
 		getAuth: () => piModels.getAuth(piProvider.id),
+		getApiKey: resolveApiKey,
 		liveCatalog: spec.liveCatalog,
 		fallbackDescriptors: spec.fallbackDescriptors(piModels, piProvider),
 		piProviderId: piProvider.id,
@@ -1203,6 +1215,7 @@ function registerSubscriptionProvider(ctx, config, spec) {
 		getLiveEntry: catalogCache.getLiveEntry,
 		fallbackDescriptors: spec.fallbackDescriptors(piModels, piProvider),
 		resolveAttachments: () => attachments ?? ctx.get("attachments"),
+		resolveApiKey,
 		listCatalog: catalogCache.listCatalog
 	});
 	// The provider only becomes visible in the Models page and the model
@@ -1279,6 +1292,11 @@ function registerSubscriptionProvider(ctx, config, spec) {
 		onAuthChanged: syncRegistration,
 		listCatalog: () => adapter.listModels(spec.id),
 		promptHandler: spec.loginPrompt,
+		// A spec-supplied login (e.g. Google's hand-rolled loopback OAuth)
+		// replaces pi-ai's bundled flow; its credential is persisted by the
+		// controller into the same plugin-owned file.
+		loginFn: spec.login !== void 0 ? spec.login : (interaction) => models.login(piProvider.id, "oauth", interaction),
+		customLogin: spec.login !== void 0,
 		onLanguageHint: (lang) => {
 			inferredLocale = lang;
 			syncDisplayName();

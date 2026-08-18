@@ -23,6 +23,7 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { authFilePayload, exchangeAuthorizationCode, pollAuthorizationOnce, requestUserCode } from "./device-flow.js";
 import { registerAnthropic } from "./providers/anthropic.js";
 import { registerGithub } from "./providers/github.js";
+import { registerGoogle } from "./providers/google.js";
 import { registerXai } from "./providers/xai.js";
 /**
  * Reasoning-effort vocabulary the OpenAI backend advertises per model through
@@ -2250,6 +2251,7 @@ function apply(ctx, config) {
 	registerXai(ctx, config);
 	registerGithub(ctx, config);
 	registerAnthropic(ctx, config);
+	registerGoogle(ctx, config);
 }
 //#endregion
-export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, latestConversationImageRef, name, registerAnthropic, registerGithub, registerXai, resolveAdapterOptions };
+export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, latestConversationImageRef, name, registerAnthropic, registerGithub, registerGoogle, registerXai, resolveAdapterOptions };
