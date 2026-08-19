@@ -962,10 +962,21 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 		};
 		const clone = (model, id, name) => ({
 			...model,
+			// pi-ai dispatches on model.provider; built-in templates carry it,
+			// but custom providers (Volcengine) ship model entries without it,
+			// which would fail every request with "Unknown provider: undefined".
+			provider: this.config.piProviderId,
 			id,
 			name,
 			baseUrl: this.config.effectiveBaseURL(this.config.options()),
-			...Number.isInteger(live?.contextWindow) ? { contextWindow: live.contextWindow } : {},
+			// Custom templates may also omit the fields pi-ai's wire path
+			// requires: contextWindow drives max-token clamping (undefined
+			// yields NaN), and a missing cost object crashes cost accounting
+			// at stream end. Fall back to the spec's configured defaults and
+			// a zero cost, matching the harness-facing descriptor defaults.
+			contextWindow: Number.isInteger(live?.contextWindow) ? live.contextWindow : Number.isInteger(model.contextWindow) ? model.contextWindow : this.config.options().defaultContextWindow,
+			maxTokens: Number.isInteger(model.maxTokens) ? model.maxTokens : 8192,
+			cost: model.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 			...thinkingLevelMap !== void 0 ? { thinkingLevelMap } : {},
 			...(Object.keys(headers).length > 0 ? { headers: { ...(model.headers ?? {}), ...headers } } : {})
 		});

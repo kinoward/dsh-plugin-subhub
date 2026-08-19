@@ -108,6 +108,7 @@ node login.js
 | 10 | API-key 保存路由对个别服务商 404(MiniMax) | 路由只在「存在验证器」时注册,无目录接口的服务商永远 404 | 保存路由与验证器解耦:API-key 服务商一律注册路由,验证器存在才先探测、否则直接持久化(见 `src/providers/api-key.js` 的 `saveApiKey` 恒存在) |
 | 11 | OpenRouter 模型选择器出现 400+ 条目,含 `:batch`/`:free` 变体 | 其 `/models` 是公开目录、无账户过滤,批处理与免费变体全量返回 | 在线结果同样应用首方厂商前缀过滤,并剔除 `:batch` 与有付费同名的 `:free` 变体(见 `openRouterLiveCatalog`) |
 | 12 | API-key 类服务的模型页无目录行 | 验证脚本把 `settings.yaml` 放错位置(profile 子目录),设置未加载 | harness 的 settings 文件在 `DSH_HOME/settings.yaml`(harness home 根),不在 `profiles/<name>/` 下 |
+| 13 | 自定义 provider(火山方舟)流式请求报 `Unknown provider: undefined` 或 `Cannot read properties of undefined (reading 'includes' / 'tiers')` | `createProvider` 的模型条目不带 `provider`/`baseUrl`/`contextWindow`/`maxTokens`/`cost` 字段,而 pi-ai 的派发、上下文钳制与费用统计都依赖它们 | `piModelFor` 克隆时补齐这些字段:`provider` 恒为当前 pi-ai provider id;`contextWindow` 取在线目录 → 模板 → 配置默认(否则钳制出 NaN);`maxTokens` 兜底 8192;`cost` 兜底全零(`src/piai.js`) |
 
 ### 真实账户最小验证配方
 
@@ -118,6 +119,10 @@ node login.js
 3. `models.streamSimple(...)` 发最小请求(如「Reply with exactly one word: ok」),迭代事件断言 `done`/文本/用量,或读取 `error` 事件的 `errorMessage` 定位后端拒绝原因。
 
 验证结束必须删除 `.tmp-repro/`;真实凭据只读不复制。
+
+### API-key 类:本地 mock 往返测试(等效验证)
+
+没有真实套餐密钥时,用本地 mock 覆盖每个服务商的线协议往返(以 `.tmp-repro/piai-mock/verify-roundtrip.mjs` 为例):起一个本地 HTTP 服务,按路径后缀回放最小合法 SSE(`/chat/completions` 回 OpenAI 流,`/messages` 回 Anthropic 流);对每个服务商——`FileCredentialStore` + `createModels` + `setProvider(工厂)` + 按 `piModelFor` 的字段克隆模型模板(provider 戳、baseUrl、contextWindow/maxTokens/cost 兜底)+ `streamSimple` 迭代事件。断言:请求命中预期路径、请求携带粘贴的 key、文本与 `done`/用量/`stopReason` 正常。这能提前暴露自定义 provider 缺字段等只会在真实请求时爆炸的问题。
 
 ## 分发(单一仓库直装)
 
