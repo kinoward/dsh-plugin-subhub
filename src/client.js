@@ -67,13 +67,7 @@ window.__ModuleLoader__.load({
 			kimiName: "Kimi Code 订阅",
 			kimiDesc: "K3 / Kimi For Coding 等模型,使用 Kimi Code 订阅账户登录。",
 			volcengineName: "火山方舟",
-			volcengineDesc: "Coding Plan 内的模型,粘贴方舟 API Key 使用。",
-			alibabaName: "阿里云百炼",
-			alibabaDesc: "Token Plan 内的 Qwen 等模型,粘贴百炼 API Key 使用。",
-			minimaxName: "MiniMax",
-			minimaxDesc: "Token Plan 内的 MiniMax 模型,粘贴 API Key 使用。",
-			openrouterName: "OpenRouter",
-			openrouterDesc: "OpenRouter 上的多家模型,粘贴 API Key 使用。",
+			volcengineDesc: "Coding Plan 内的模型,粘贴方舟 Coding Plan 密钥使用。",
 			keyIntro: "粘贴服务商提供的 API Key,验证通过后保存;对应服务会出现在「模型」页。Key 只保存在本插件自己的文件中。",
 			keyPlaceholder: "API Key",
 			keySave: "保存",
@@ -139,13 +133,7 @@ window.__ModuleLoader__.load({
 			kimiName: "Kimi Code subscription",
 			kimiDesc: "K3, Kimi For Coding and other models, signed in with a Kimi Code subscription account.",
 			volcengineName: "Volcengine Ark",
-			volcengineDesc: "Models in your Coding Plan, using a pasted Ark API key.",
-			alibabaName: "Alibaba Cloud Bailian",
-			alibabaDesc: "Qwen and other models in your Token Plan, using a pasted Bailian API key.",
-			minimaxName: "MiniMax",
-			minimaxDesc: "MiniMax models in your Token Plan, using a pasted API key.",
-			openrouterName: "OpenRouter",
-			openrouterDesc: "Models across OpenRouter vendors, using a pasted API key.",
+			volcengineDesc: "Models in your Coding Plan, using a pasted Ark Coding Plan key.",
 			keyIntro: "Paste the provider's API key; it is validated before saving, and the provider then appears on the Models page. The key is stored only in this plugin's own file.",
 			keyPlaceholder: "API Key",
 			keySave: "Save",
@@ -373,43 +361,6 @@ window.__ModuleLoader__.load({
 				d: "M13.2 2 4.5 13.6h5.4L9.3 22l9.4-12.2h-5.7L13.2 2Z"
 			}));
 		}
-		/** Inline Alibaba Cloud logomark (cloud outline, drawn in currentColor). */
-		function AlibabaLogo({ size = 16 }) {
-			return h("svg", {
-				width: size,
-				height: size,
-				viewBox: "0 0 24 24",
-				fill: "currentColor",
-				"aria-hidden": "true"
-			}, h("path", {
-				d: "M7 18a5 5 0 1 1 .9-9.93A6.5 6.5 0 0 1 19.9 10.9 4.5 4.5 0 0 1 18.5 19H7Z"
-			}));
-		}
-		/** Inline MiniMax logomark (three rising bars, drawn in currentColor). */
-		function MiniMaxLogo({ size = 16 }) {
-			return h("svg", {
-				width: size,
-				height: size,
-				viewBox: "0 0 24 24",
-				fill: "currentColor",
-				"aria-hidden": "true"
-			}, h("path", {
-				d: "M4 18V6h4v12H4Zm6-8v8h4v-8h-4Zm6-4v12h4V6h-4Z"
-			}));
-		}
-		/** Inline OpenRouter logomark (route split, drawn in currentColor). */
-		function OpenRouterLogo({ size = 16 }) {
-			return h("svg", {
-				width: size,
-				height: size,
-				viewBox: "0 0 24 24",
-				fill: "none",
-				"aria-hidden": "true"
-			}, [
-				h("path", { key: "a", d: "M4 6h7l4 12h5", stroke: "currentColor", "stroke-width": 2.4, "stroke-linecap": "round", "stroke-linejoin": "round" }),
-				h("path", { key: "b", d: "M4 6h7l4-3h5", stroke: "currentColor", "stroke-width": 2.4, "stroke-linecap": "round", "stroke-linejoin": "round" })
-			]);
-		}
 		/** Shell-style copy button with one-second "copied" feedback. */
 		function CopyButton({ t, text }) {
 			const [copied, setCopied] = React.useState(false);
@@ -578,10 +529,7 @@ window.__ModuleLoader__.load({
 				{ names: [zh.anthropicName, en.anthropicName], apiBase: `${API}/anthropic` },
 				{ names: [zh.geminiName, en.geminiName], apiBase: `${API}/google` },
 				{ names: [zh.kimiName, en.kimiName], apiBase: `${API}/kimi` },
-				{ names: [zh.volcengineName, en.volcengineName], apiBase: `${API}/volcengine` },
-				{ names: [zh.alibabaName, en.alibabaName], apiBase: `${API}/alibaba` },
-				{ names: [zh.minimaxName, en.minimaxName], apiBase: `${API}/minimax` },
-				{ names: [zh.openrouterName, en.openrouterName], apiBase: `${API}/openrouter` }
+				{ names: [zh.volcengineName, en.volcengineName], apiBase: `${API}/volcengine` }
 			];
 			const matchProvider = (name) => SUBSCRIPTION_ROWS.find((entry) => entry.names.includes(name));
 			const CHEVRON_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6 L8 10 L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -1133,30 +1081,6 @@ window.__ModuleLoader__.load({
 					descKey: "volcengineDesc",
 					logo: h(VolcengineLogo, { size: 16 }),
 					apiBase: `${API}/volcengine`,
-					loginMode: "apikey"
-				},
-				{
-					id: "dsh-plugin-subhub-alibaba",
-					nameKey: "alibabaName",
-					descKey: "alibabaDesc",
-					logo: h(AlibabaLogo, { size: 16 }),
-					apiBase: `${API}/alibaba`,
-					loginMode: "apikey"
-				},
-				{
-					id: "dsh-plugin-subhub-minimax",
-					nameKey: "minimaxName",
-					descKey: "minimaxDesc",
-					logo: h(MiniMaxLogo, { size: 16 }),
-					apiBase: `${API}/minimax`,
-					loginMode: "apikey"
-				},
-				{
-					id: "dsh-plugin-subhub-openrouter",
-					nameKey: "openrouterName",
-					descKey: "openrouterDesc",
-					logo: h(OpenRouterLogo, { size: 16 }),
-					apiBase: `${API}/openrouter`,
 					loginMode: "apikey"
 				}
 			];

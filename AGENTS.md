@@ -40,6 +40,7 @@
 1. **模型与思考档位必须动态获取,不得写死**——不同订阅档位可用的模型与思考深度不同,写死会导致用户升级订阅后部分模型/档位不可用。选择器只展示账户目录声明的模型与档位;静态列表仅作离线兜底,绝不替代在线结果(见「功能行为契约·模型目录」)。若服务商没有账户模型目录接口(如 Anthropic),以其官方已知模型清单为目录并保持精简,规格文件中必须写明该事实。
 2. **多思考档位按从低到高排序,首项为 Off**(仿照 deepseek 模型的设计);Off 仅在账户目录声明关闭档时展示——若后端拒绝显式 off(如 xai 实测 HTTP 400 invalid reasoning effort),只展示目录声明的档位;默认档优先取账户目录声明的默认值,其次才用配置。
 3. **声明多模态(图片输入)的模型必须实测**——以真实账户或等效往返测试覆盖「用户图片输入」与「工具结果图片」两条路径(见「功能行为契约·图片输入」),发现问题必须修复,验证通过前不得视为接入完成。
+4. **不得重复接入外壳内置目录已有的服务**——接入前核对 harness 的 `dsh-llm-pi-ai`(基于 pi-ai 内置目录)与「模型」页「Add provider」清单:内置已提供同一服务与同一凭据方式的(如 `minimax-cn`、`qwen-token-plan-cn`、`openrouter` 的 API-key 路由),插件不再接入;仅接入内置没有的订阅/套餐(如火山方舟 Coding Plan)。内置的 api-key 路由与插件的订阅 OAuth 登录(OpenAI/xAI/GitHub/Claude/Gemini/Kimi)凭据模型不同,属互补而非重复。
 
 接入清单、xAI 实战踩坑速查(版本门/指纹头、历史消息 `usage`/`stopReason`、工具结果图片回声、`latestConversationImageRef` 事件扫描等)与真实账户最小验证配方见 `docs/development.md` 的「新订阅商接入:规范与实战速查」。
 
@@ -85,7 +86,7 @@ src/providers/github.js         GitHub Copilot 订阅规格(设备码登录与�
 src/providers/anthropic.js      Claude 订阅规格(回环 PKCE 登录;无账户目录接口,官方已知模型清单为目录)
 src/providers/google.js         Gemini 订阅规格(自写回环 PKCE 登录与 token 刷新;Generative Language API 在线目录)
 src/providers/kimi.js           Kimi Code 订阅规格(设备码登录,Anthropic Messages 协议;在线目录存在时优先)
-src/providers/api-key.js        API-key 类订阅规格工厂(火山方舟/阿里/ MiniMax/OpenRouter;密钥粘贴登录,无订阅令牌)
+src/providers/api-key.js        火山方舟 Coding Plan 密钥套餐规格(自定义 pi-ai provider;MiniMax/阿里百炼/OpenRouter 已由外壳内置目录提供,不重复接入)
 ```
 
 按需读取的最小集:

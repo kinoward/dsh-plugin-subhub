@@ -23,7 +23,7 @@
 
 把**第三方订阅账户**接入 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，使用订阅覆盖的模型进行对话：文字对话、图片理解、图片生成与图片编辑。
 
-**目前支持 OpenAI（ChatGPT）、xAI（Grok）、GitHub Copilot、Claude、Gemini、Kimi Code 订阅，以及火山方舟、阿里云百炼、MiniMax、OpenRouter 的 API Key 类套餐。**
+**目前支持 OpenAI（ChatGPT）、xAI（Grok）、GitHub Copilot、Claude、Gemini、Kimi Code 订阅，以及火山方舟 Coding Plan（粘贴套餐密钥）。MiniMax、阿里云百炼、OpenRouter 等密钥类服务 DeepSeek Harness 已内置，请直接在「模型」页添加。**
 
 > 可用模型、使用额度和响应速度由订阅服务商及你的账户决定。服务商调整服务后，部分功能可能暂时不可用。
 
@@ -40,7 +40,7 @@ dsh web
 
 ## 快速开始
 
-1. **登录** —— 打开 **设置 → 第三方订阅**，在想要接入的订阅卡片上点击「登录」（例如 **OpenAI 订阅** 卡片对应 ChatGPT 账号、**xAI Grok 订阅** 卡片对应 SuperGrok / X Premium+ 账号），在浏览器中打开授权链接并输入一次性码（码 15 分钟内有效）。以套餐 API Key 使用的服务（火山方舟、阿里云百炼、MiniMax、OpenRouter）改为粘贴 Key。完成授权后页面会自动同步，订阅随即出现在模型选择器中。
+1. **登录** —— 打开 **设置 → 第三方订阅**，在想要接入的订阅卡片上点击「登录」（例如 **OpenAI 订阅** 卡片对应 ChatGPT 账号、**xAI Grok 订阅** 卡片对应 SuperGrok / X Premium+ 账号），在浏览器中打开授权链接并输入一次性码（码 15 分钟内有效）。**火山方舟** 卡片改为粘贴 Coding Plan 套餐密钥；MiniMax、百炼、OpenRouter 等密钥类服务已在 harness 的「模型」页内置。完成授权后页面会自动同步，订阅随即出现在模型选择器中。
 2. **选择模型** —— 点击输入框左下角的模型选择器（显示当前模型与推理等级），点「模型」，在 **OpenAI 订阅** 分组下选择想用的模型；需要时可在同一菜单中调整推理等级。可用模型与推理等级随账户自动同步显示。
 3. **使用图片** —— 上传图片并提问、描述画面生成图片，或要求编辑图片：
 

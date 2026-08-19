@@ -1,19 +1,17 @@
-// dsh-plugin-subhub: the API-key class of providers. These services sell
-// subscription/plan credits consumed through an OpenAI-compatible (or
-// Anthropic-protocol) endpoint authenticated with a key pasted in the hub:
-// Volcengine Ark Coding Plan, Alibaba Cloud Bailian Token Plan, MiniMax,
-// and OpenRouter. One shared factory builds each spec on the pi-ai-backed
-// core; per-provider facts are the endpoint, the model catalog source, and
-// the display identity.
+// dsh-plugin-subhub: the plan-key provider. Volcengine Ark Coding Plan is a
+// genuine subscription plan (monthly coding quota) consumed through its
+// plan-specific OpenAI-compatible endpoint, authenticated with a plan key
+// pasted in the hub. The harness does not ship a Volcengine route, so the
+// plugin builds a minimal pi-ai provider for it. (MiniMax, Alibaba Bailian
+// Token Plan and OpenRouter were considered and rejected: the harness's own
+// Models page already ships minimax-cn / qwen-token-plan-cn / openrouter as
+// built-in API-key routes, so re-integrating them here would duplicate.)
 import { LlmError, resolveRetryPolicy, RetryPolicySchema } from "@deepseek-ai/dsh-llm";
 import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { MAX_TIMER_DELAY_MS } from "@deepseek-ai/dsh-timeout";
 import z from "@deepseek-ai/schemastery";
 import { createProvider, envApiKeyAuth } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
-import { minimaxCnProvider } from "@earendil-works/pi-ai/providers/minimax-cn";
-import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
-import { qwenTokenPlanCnProvider } from "@earendil-works/pi-ai/providers/qwen-token-plan-cn";
 import { DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS_CACHE_TTL_MS, DEFAULT_STREAM_IDLE_TIMEOUT_MS, registerSubscriptionProvider } from "../piai.js";
 /** Reasoning-level vocabulary the backends accept. */
 const EFFORT_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -107,9 +105,9 @@ function registerApiKeyProvider(ctx, config, { id, slug, label, defaultBaseURL, 
 		liveCatalog,
 		reasoningEffort,
 		resolveApiKey: ({ store, providerId }) => resolveApiKey({ store, providerId, label }),
-		// Every API-key provider accepts a pasted key; the spec's validator
+		// The plan-key provider accepts a pasted key; the spec's validator
 		// probes it against the backend when one exists, otherwise the key is
-		// persisted as-is (MiniMax has no catalog endpoint to probe).
+		// persisted as-is.
 		saveApiKey: async (key, helpers) => {
 			if (validate !== void 0) await validate(key, helpers);
 		},
@@ -152,67 +150,4 @@ function registerVolcengine(ctx, config) {
 	});
 }
 //#endregion
-//#region Alibaba Cloud Bailian Token Plan
-const ALIBABA_BASE_URL = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1";
-function registerAlibaba(ctx, config) {
-	return registerApiKeyProvider(ctx, config, {
-		id: "dsh-plugin-subhub-alibaba",
-		slug: "alibaba",
-		label: "alibaba",
-		defaultBaseURL: ALIBABA_BASE_URL,
-		providerFactory: () => qwenTokenPlanCnProvider(),
-		fallbackFilter: () => true,
-		liveCatalog: openAICompatLiveCatalog("alibaba", ALIBABA_BASE_URL),
-		validate: makeValidate("alibaba", openAICompatLiveCatalog("alibaba", ALIBABA_BASE_URL)),
-		reasoningEffort: true,
-		displayName: (lang) => lang === "en" ? "Alibaba Cloud Bailian" : "阿里云百炼"
-	});
-}
-//#endregion
-//#region MiniMax (Anthropic protocol; no catalog endpoint to probe)
-const MINIMAX_BASE_URL = "https://api.minimaxi.com/anthropic";
-function registerMinimax(ctx, config) {
-	return registerApiKeyProvider(ctx, config, {
-		id: "dsh-plugin-subhub-minimax",
-		slug: "minimax",
-		label: "minimax",
-		defaultBaseURL: MINIMAX_BASE_URL,
-		providerFactory: () => minimaxCnProvider(),
-		fallbackFilter: () => true,
-		liveCatalog: async () => [],
-		reasoningEffort: true,
-		displayName: () => "MiniMax"
-	});
-}
-//#endregion
-//#region OpenRouter
-const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-/** Curated offline fallback: first-party vendors, no dated/alias noise. */
-const OPENROUTER_FALLBACK_PREFIX = /^(anthropic|openai|google|deepseek|meta-llama|mistralai|qwen|x-ai|moonshotai)\//;
-/** OpenRouter /models is a public catalog (unauthenticated), so the live list needs the same first-party filter as the fallback; drop `:batch` (async-only pricing variants) and `:free` twins of paid models to avoid duplicate/non-chat ids. */
-function openRouterLiveCatalog() {
-	const base = openAICompatLiveCatalog("openrouter", OPENROUTER_BASE_URL);
-	return async function liveCatalog(config, apiKey, piProviderId, piModels) {
-		const entries = await base(config, apiKey, piProviderId, piModels);
-		const ids = new Set(entries.map((entry) => entry.id));
-		return entries.filter((entry) => OPENROUTER_FALLBACK_PREFIX.test(entry.id)
-			&& !entry.id.endsWith(":batch")
-			&& !(entry.id.endsWith(":free") && ids.has(entry.id.slice(0, -5))));
-	};
-}
-function registerOpenRouter(ctx, config) {
-	return registerApiKeyProvider(ctx, config, {
-		id: "dsh-plugin-subhub-openrouter",
-		slug: "openrouter",
-		label: "openrouter",
-		defaultBaseURL: OPENROUTER_BASE_URL,
-		providerFactory: () => openrouterProvider(),
-		fallbackFilter: (model) => OPENROUTER_FALLBACK_PREFIX.test(model.id),
-		liveCatalog: openRouterLiveCatalog(),
-		validate: makeValidate("openrouter", openRouterLiveCatalog()),
-		reasoningEffort: true,
-		displayName: () => "OpenRouter"
-	});
-}
-//#endregion
-export { registerAlibaba, registerMinimax, registerOpenRouter, registerVolcengine };
+export { registerVolcengine };

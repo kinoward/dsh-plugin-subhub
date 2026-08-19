@@ -105,8 +105,8 @@ node login.js
 | 7 | 登录弹窗/目录文案写死 ChatGPT,其它服务也显示 ChatGPT | 共享文案未参数化 | 共享文案用 `{name}` 参数化,取当前服务显示名(`src/client.js`) |
 | 8 | 后端拒绝 off 档(HTTP 400 invalid reasoning effort) | 该模型没有关闭档,目录也未声明 | Off 仅在目录声明时展示;目录只声明 high/xhigh 时就只显示这两档(低→高) |
 | 9 | 推送被仓库规则拦截(repository rule violations) | 代码内嵌了 Google OAuth client secret(`GOCSPX-` 触发密钥保护) | 机密一律走环境变量(见 `src/providers/google.js` 的 `GEMINI_OAUTH_CLIENT_SECRET`);公开 client id 可以入库 |
-| 10 | API-key 保存路由对个别服务商 404(MiniMax) | 路由只在「存在验证器」时注册,无目录接口的服务商永远 404 | 保存路由与验证器解耦:API-key 服务商一律注册路由,验证器存在才先探测、否则直接持久化(见 `src/providers/api-key.js` 的 `saveApiKey` 恒存在) |
-| 11 | OpenRouter 模型选择器出现 400+ 条目,含 `:batch`/`:free` 变体 | 其 `/models` 是公开目录、无账户过滤,批处理与免费变体全量返回 | 在线结果同样应用首方厂商前缀过滤,并剔除 `:batch` 与有付费同名的 `:free` 变体(见 `openRouterLiveCatalog`) |
+| 10 | API-key 保存路由对个别服务商 404(历史:MiniMax) | 路由只在「存在验证器」时注册,无目录接口的服务商永远 404 | 保存路由与验证器解耦:计划密钥服务商一律注册路由,验证器存在才先探测、否则直接持久化(见 `src/providers/api-key.js` 的 `saveApiKey` 恒存在) |
+| 11 | API-key 类服务与外壳内置目录重复 | harness 的「模型」页「Add provider」已原生内置 `minimax-cn`/`qwen-token-plan-cn`/`openrouter` 等 API-key 路由(同端点、同凭据方式) | 重复的服务不接入,已删除 MiniMax/阿里百炼/OpenRouter 的插件侧实现,仅保留内置没有的火山方舟 Coding Plan(见 `AGENTS.md` 接入规范第 4 条) |
 | 12 | API-key 类服务的模型页无目录行 | 验证脚本把 `settings.yaml` 放错位置(profile 子目录),设置未加载 | harness 的 settings 文件在 `DSH_HOME/settings.yaml`(harness home 根),不在 `profiles/<name>/` 下 |
 | 13 | 自定义 provider(火山方舟)流式请求报 `Unknown provider: undefined` 或 `Cannot read properties of undefined (reading 'includes' / 'tiers')` | `createProvider` 的模型条目不带 `provider`/`baseUrl`/`contextWindow`/`maxTokens`/`cost` 字段,而 pi-ai 的派发、上下文钳制与费用统计都依赖它们 | `piModelFor` 克隆时补齐这些字段:`provider` 恒为当前 pi-ai provider id;`contextWindow` 取在线目录 → 模板 → 配置默认(否则钳制出 NaN);`maxTokens` 兜底 8192;`cost` 兜底全零(`src/piai.js`) |
 
