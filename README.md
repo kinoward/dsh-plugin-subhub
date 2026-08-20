@@ -23,7 +23,7 @@
 
 Bring a **third-party subscription account** into [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and chat with the models your subscription covers: text chat, image understanding, image generation, and image editing.
 
-**Supported today: OpenAI / ChatGPT, xAI (Grok), GitHub Copilot, Claude, Gemini, and Kimi Code subscriptions, plus the Volcengine Ark Coding Plan (plan key). Key-based providers such as MiniMax, Alibaba Cloud Bailian, and OpenRouter are already built into DeepSeek Harness — add them on the Models page.**
+**Supported today: OpenAI / ChatGPT, xAI (Grok), GitHub Copilot, Claude, Gemini, and Kimi Code subscriptions — all signed in with your subscription account through browser authorization. Key-based services are already built into DeepSeek Harness — add them on its Models page.**
 
 > Model availability, usage limits, and response speed are decided by the subscription provider and your account. Some features may become temporarily unavailable after the provider changes its service.
 
@@ -40,7 +40,7 @@ dsh web
 
 ## Quick start
 
-1. **Log in** — open **Settings → Third-party subscriptions**, click **Sign in** on the card of the subscription you want (e.g. **OpenAI subscription** for a ChatGPT account or **xAI Grok subscription** for SuperGrok / X Premium+), then open the authorization link in a browser and enter the one-time code (valid for 15 minutes). The **Volcengine Ark** card takes a pasted Coding Plan key instead; other key-based providers (MiniMax, Bailian, OpenRouter) are built into the harness's Models page. Once authorized, the page syncs automatically and the subscription appears in the model picker.
+1. **Log in** — open **Settings → Third-party subscriptions**, click **Sign in** on the card of the subscription you want (e.g. **OpenAI subscription** for a ChatGPT account or **xAI Grok subscription** for SuperGrok / X Premium+), then open the authorization link in a browser and enter the one-time code (valid for 15 minutes). Once authorized, the page syncs automatically and the subscription appears in the model picker.
 2. **Pick a model** — click the model selector at the bottom-left of the input area (it shows the current model and reasoning level), choose **Model**, and pick a model under **OpenAI subscription**. Adjust the reasoning level from the same menu if needed. Available models and reasoning levels come from your account and stay in sync automatically.
 3. **Use images** — upload an image and ask about it, describe an image to generate one, or ask to edit an image:
 

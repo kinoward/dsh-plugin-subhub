@@ -20,7 +20,7 @@
 ## 用户文档边界
 
 - `README.md`(英文主文档)与 `README.zh.md`(中文镜像)只服务插件使用者,按「定位 → 安装 → 快速开始(登录/选择模型/图片使用/账户管理)→ 命令行登录 → 界面预览 → 安全与隐私 → 支持 → 许可」组织;优先写用户要点击什么、执行什么、看到什么。安全隐私小节直接写在两个 README 末尾,不另建用户文档页面。
-- **定位口径**:README 把插件定位为「第三方订阅服务接入插件」,不得写成仅支持某一家订阅;「支持的服务」段落必须与已合入的提供商保持同步(登录方式:OAuth 订阅类与粘贴 API Key 类分开说明)。模型、额度、可用性由对应订阅服务商与账户决定。
+- **定位口径**:README 把插件定位为「第三方订阅服务接入插件」,不得写成仅支持某一家订阅;「支持的服务」段落必须与已合入的提供商保持同步。产品方向为**仅 OAuth 认证的订阅账户**,不接入粘贴 API Key 类套餐(密钥类服务直接用 harness「模型」页的内置目录)。模型、额度、可用性由对应订阅服务商与账户决定。
 - 不在 README 展开行 id、provider 路由、内部 API 与端点、OAuth/JWT 刷新、缓存与并发锁、SSE、请求字段、附件编码、工具注册方式、源码目录职责等实现细节。稳定的维护约束写在本文件,短期实现事实留在代码及 `docs/development.md`。
 - 不在 README 写死某个外部模型当前是否可用、是否支持图片或有哪些思考档位;以界面根据账户能力显示的结果为准。
 - 用户文案避免「完全」「实时」「永不」「与官方实现等价」等无法长期保证的绝对说法。描述外部服务时明确模型、额度、限速和可用性由服务商与账户决定。
@@ -40,7 +40,7 @@
 1. **模型与思考档位必须动态获取,不得写死**——不同订阅档位可用的模型与思考深度不同,写死会导致用户升级订阅后部分模型/档位不可用。选择器只展示账户目录声明的模型与档位;静态列表仅作离线兜底,绝不替代在线结果(见「功能行为契约·模型目录」)。若服务商没有账户模型目录接口(如 Anthropic),以其官方已知模型清单为目录并保持精简,规格文件中必须写明该事实。
 2. **多思考档位按从低到高排序,首项为 Off**(仿照 deepseek 模型的设计);Off 仅在账户目录声明关闭档时展示——若后端拒绝显式 off(如 xai 实测 HTTP 400 invalid reasoning effort),只展示目录声明的档位;默认档优先取账户目录声明的默认值,其次才用配置。
 3. **声明多模态(图片输入)的模型必须实测**——以真实账户或等效往返测试覆盖「用户图片输入」与「工具结果图片」两条路径(见「功能行为契约·图片输入」),发现问题必须修复,验证通过前不得视为接入完成。
-4. **不得重复接入外壳内置目录已有的服务**——接入前核对 harness 的 `dsh-llm-pi-ai`(基于 pi-ai 内置目录)与「模型」页「Add provider」清单:内置已提供同一服务与同一凭据方式的(如 `minimax-cn`、`qwen-token-plan-cn`、`openrouter` 的 API-key 路由),插件不再接入;仅接入内置没有的订阅/套餐(如火山方舟 Coding Plan)。内置的 api-key 路由与插件的订阅 OAuth 登录(OpenAI/xAI/GitHub/Claude/Gemini/Kimi)凭据模型不同,属互补而非重复。
+4. **不得重复接入外壳内置目录已有的服务,且只接入 OAuth 订阅**——接入前核对 harness 的 `dsh-llm-pi-ai`(基于 pi-ai 内置目录)与「模型」页「Add provider」清单:内置已提供同一服务与同一凭据方式的(如 `minimax-cn`、`qwen-token-plan-cn`、`openrouter`、`zai-coding-cn` 的 API-key 路由),插件不再接入。插件产品方向是**仅 OAuth 认证的订阅账户**(OpenAI/xAI/GitHub/Claude/Gemini/Kimi),不接入任何粘贴 API Key 类的套餐;内置的 api-key 路由与插件的订阅 OAuth 登录凭据模型不同,属互补而非重复。
 
 接入清单、xAI 实战踩坑速查(版本门/指纹头、历史消息 `usage`/`stopReason`、工具结果图片回声、`latestConversationImageRef` 事件扫描等)与真实账户最小验证配方见 `docs/development.md` 的「新订阅商接入:规范与实战速查」。
 
@@ -49,7 +49,6 @@
 - `settings.yaml` 中 `dsh-plugin-subhub-openai` 节当前识别 `authFile`、`baseURL`、`apiBaseURL`、`defaultContextWindow`、`modelsCacheTtlMs`、`defaultReasoningEffort`、`streamIdleTimeoutMs`、`enableImageTool`、`imageModel`、`retryPolicy`。其中 README 或发布说明曾面向用户公开的键属于兼容面;内部调优键可以演进,但删除或改名之前必须检查仓库历史与用户迁移影响。
 - `settings.yaml` 中 `dsh-plugin-subhub-xai` 节当前识别 `authFile`、`baseURL`、`apiBaseURL`、`defaultContextWindow`、`modelsCacheTtlMs`、`defaultReasoningEffort`、`streamIdleTimeoutMs`、`retryPolicy`;推理档位的可选值来自账户目录的 `reasoning_efforts` 声明,不在插件内写死。
 - `settings.yaml` 中 `dsh-plugin-subhub-anthropic`、`dsh-plugin-subhub-google`、`dsh-plugin-subhub-kimi` 节当前识别 `authFile`、`baseURL`、`defaultContextWindow`、`modelsCacheTtlMs`、`defaultReasoningEffort`、`streamIdleTimeoutMs`、`retryPolicy`;`dsh-plugin-subhub-github` 节不含 `defaultReasoningEffort`(GitHub Copilot 无推理档位)。
-- `settings.yaml` 中 `dsh-plugin-subhub-volcengine` 节当前识别 `authFile`、`baseURL`、`defaultContextWindow`、`modelsCacheTtlMs`、`defaultReasoningEffort`、`streamIdleTimeoutMs`、`retryPolicy`;保存密钥时仅在后端明确拒绝(HTTP 401/403)才判无效,目录接口不存在(404/405 等)视为「无目录可探测」直接保存。
 - `authFile` 一经显式配置,登录、刷新、状态查询与退出必须始终使用该文件;退出会删除它,因此不得暗中改读其它程序的凭据。
 - 内部端点、请求体候选形态、缓存默认毫秒数和重试步骤属于可变实现,除非升级为兼容性承诺,否则不要复制到 README。
 
@@ -88,7 +87,6 @@ src/providers/github.js         GitHub Copilot 订阅规格(设备码登录与�
 src/providers/anthropic.js      Claude 订阅规格(回环 PKCE 登录;无账户目录接口,官方已知模型清单为目录)
 src/providers/google.js         Gemini 订阅规格(自写回环 PKCE 登录与 token 刷新;Generative Language API 在线目录)
 src/providers/kimi.js           Kimi Code 订阅规格(设备码登录,Anthropic Messages 协议;在线目录存在时优先)
-src/providers/api-key.js        火山方舟 Coding Plan 密钥套餐规格(自定义 pi-ai provider;MiniMax/阿里百炼/OpenRouter 已由外壳内置目录提供,不重复接入)
 ```
 
 按需读取的最小集:
