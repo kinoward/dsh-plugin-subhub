@@ -48,6 +48,8 @@
 
 - `settings.yaml` 中 `dsh-plugin-subhub-openai` 节当前识别 `authFile`、`baseURL`、`apiBaseURL`、`defaultContextWindow`、`modelsCacheTtlMs`、`defaultReasoningEffort`、`streamIdleTimeoutMs`、`enableImageTool`、`imageModel`、`retryPolicy`。其中 README 或发布说明曾面向用户公开的键属于兼容面;内部调优键可以演进,但删除或改名之前必须检查仓库历史与用户迁移影响。
 - `settings.yaml` 中 `dsh-plugin-subhub-xai` 节当前识别 `authFile`、`baseURL`、`apiBaseURL`、`defaultContextWindow`、`modelsCacheTtlMs`、`defaultReasoningEffort`、`streamIdleTimeoutMs`、`retryPolicy`;推理档位的可选值来自账户目录的 `reasoning_efforts` 声明,不在插件内写死。
+- `settings.yaml` 中 `dsh-plugin-subhub-anthropic`、`dsh-plugin-subhub-google`、`dsh-plugin-subhub-kimi` 节当前识别 `authFile`、`baseURL`、`defaultContextWindow`、`modelsCacheTtlMs`、`defaultReasoningEffort`、`streamIdleTimeoutMs`、`retryPolicy`;`dsh-plugin-subhub-github` 节不含 `defaultReasoningEffort`(GitHub Copilot 无推理档位)。
+- `settings.yaml` 中 `dsh-plugin-subhub-volcengine` 节当前识别 `authFile`、`baseURL`、`defaultContextWindow`、`modelsCacheTtlMs`、`defaultReasoningEffort`、`streamIdleTimeoutMs`、`retryPolicy`;保存密钥时仅在后端明确拒绝(HTTP 401/403)才判无效,目录接口不存在(404/405 等)视为「无目录可探测」直接保存。
 - `authFile` 一经显式配置,登录、刷新、状态查询与退出必须始终使用该文件;退出会删除它,因此不得暗中改读其它程序的凭据。
 - 内部端点、请求体候选形态、缓存默认毫秒数和重试步骤属于可变实现,除非升级为兼容性承诺,否则不要复制到 README。
 

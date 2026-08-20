@@ -122,7 +122,7 @@ node login.js
 
 ### API-key 类:本地 mock 往返测试(等效验证)
 
-没有真实套餐密钥时,用本地 mock 覆盖每个服务商的线协议往返(以 `.tmp-repro/piai-mock/verify-roundtrip.mjs` 为例):起一个本地 HTTP 服务,按路径后缀回放最小合法 SSE(`/chat/completions` 回 OpenAI 流,`/messages` 回 Anthropic 流);对每个服务商——`FileCredentialStore` + `createModels` + `setProvider(工厂)` + 按 `piModelFor` 的字段克隆模型模板(provider 戳、baseUrl、contextWindow/maxTokens/cost 兜底)+ `streamSimple` 迭代事件。断言:请求命中预期路径、请求携带粘贴的 key、文本与 `done`/用量/`stopReason` 正常。这能提前暴露自定义 provider 缺字段等只会在真实请求时爆炸的问题。
+没有真实套餐密钥时,用本地 mock 覆盖每个服务商的线协议往返(示例脚本是临时验证产物,用时在 `.tmp-repro/piai-mock/` 下按需重建,参考之前实现):起一个本地 HTTP 服务,按路径后缀回放最小合法 SSE(`/chat/completions` 回 OpenAI 流,`/messages` 回 Anthropic 流);对每个服务商——`FileCredentialStore` + `createModels` + `setProvider(工厂)` + 按 `piModelFor` 的字段克隆模型模板(provider 戳、baseUrl、contextWindow/maxTokens/cost 兜底)+ `streamSimple` 迭代事件。断言:请求命中预期路径、请求携带粘贴的 key、文本与 `done`/用量/`stopReason` 正常。这能提前暴露自定义 provider 缺字段等只会在真实请求时爆炸的问题。同一 mock 也可验证密钥保存语义:目录接口返回 401/403 时拒绝保存,404/405 或不可达时视为「无目录可探测」直接保存(见 `src/providers/api-key.js` 的 `makeValidate`)。
 
 ## 分发(单一仓库直装)
 
