@@ -125,6 +125,8 @@ node node_modules/dsh-plugin-subhub/login.js
 
 - [GitHub Issues](https://github.com/kinoward/dsh-plugin-subhub/issues) —— 报告问题或提出建议，发送前请删除账户信息和其他敏感内容。
 
+各服务名称与 Logo 均为其各自所有者的商标。
+
 ## 许可
 
 [MIT License](LICENSE)

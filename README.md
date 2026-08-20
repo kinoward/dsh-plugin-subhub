@@ -125,6 +125,8 @@ Browser-framed captures of the plugin in the DeepSeek Harness Web UI — light a
 
 - [GitHub Issues](https://github.com/kinoward/dsh-plugin-subhub/issues) — report bugs or request features. Remove account details and other sensitive content before posting.
 
+Service names and logos are trademarks of their respective owners.
+
 ## License
 
 [MIT](LICENSE)
