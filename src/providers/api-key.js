@@ -80,10 +80,22 @@ function openAICompatLiveCatalog(label, defaultBaseURL) {
 		});
 	};
 }
-/** Probe a pasted key against the catalog endpoint; throws when unusable. */
+/**
+ * Probe a pasted key against the catalog endpoint. Only an explicit auth
+ * refusal (HTTP 401/403) rejects the key: a missing or unreachable catalog
+ * endpoint (404/405/5xx/network) says nothing about key validity, so the key
+ * is persisted as-is — the same posture as a provider with no catalog to
+ * probe (some plan endpoints serve no /models route at all).
+ */
 function makeValidate(label, liveCatalog) {
 	return async function validateApiKey(key, helpers) {
-		await liveCatalog(helpers.options(), key, helpers.piProviderId, helpers.piModels);
+		try {
+			await liveCatalog(helpers.options(), key, helpers.piProviderId, helpers.piModels);
+		} catch (error) {
+			const message = String(error?.message ?? error);
+			if (!/HTTP (401|403)\b/.test(message)) return;
+			throw error;
+		}
 	};
 }
 /** Shared registration for one API-key provider. */
