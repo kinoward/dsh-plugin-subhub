@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kinoward/dsh-plugin-subhub/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/release-v1.0.0-5B4CF0" alt="Release v1.0.0" /></a>
+  <a href="https://github.com/kinoward/dsh-plugin-subhub/releases/tag/v1.8.1"><img src="https://img.shields.io/badge/release-v1.8.1-5B4CF0" alt="Release v1.8.1" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Node.js-%3E%3D22.19-339933?logo=nodedotjs&logoColor=white" alt="Node.js >= 22.19" /></a>
   <img src="https://img.shields.io/badge/DSH-Web%20profile-5B4CF0" alt="DSH Web profile" />
