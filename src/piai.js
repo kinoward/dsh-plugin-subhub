@@ -980,6 +980,21 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 	listModels(provider) {
 		return this.config.listCatalog().then((live) => live.map((model) => this.descriptor(model.id, model)));
 	}
+	/**
+	 * Bind exact model metadata and the eventual request dispatch to one
+	 * adapter generation, so settings changes between preparation and
+	 * dispatch cannot combine one generation's capabilities with another's
+	 * endpoint. The harness runtime has called this on adapters since rc.8
+	 * (the LlmAdapter base gained a default then); the method is defined
+	 * here explicitly so the plugin keeps working when its peer dependency
+	 * resolves to the pre-rc.8 base that lacks it.
+	 */
+	async prepareCall(provider, model, signal) {
+		return {
+			model: await this.resolveModel(provider, model, signal),
+			stream: (options) => this.stream(options)
+		};
+	}
 	resolveModel(provider, model) {
 		const config = this.config.options();
 		return this.config.listCatalog().then((catalog) => {
