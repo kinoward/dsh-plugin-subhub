@@ -114,7 +114,47 @@ async function liveCatalog(config, apiKey, piProviderId, piModels) {
 	if (!response.ok) throw new Error(`github: model catalog request failed (HTTP ${response.status})`);
 	const body = await response.json();
 	const raw = Array.isArray(body?.data) ? body.data : Array.isArray(body?.models) ? body.models : [];
-	return raw.filter((entry) => typeof entry?.id === "string" && isSelectableCopilotModel(entry)).map((entry) => {
+	const candidates = raw.filter((entry) => typeof entry?.id === "string" && isSelectableCopilotModel(entry));
+	// The model list is not per-account authoritative: entries that the chat
+	// endpoint rejects (e.g. model_not_supported for tiers the account has
+	// not enabled) still show policy "enabled". Probe each candidate with a
+	// one-token request on its declared endpoint and keep only the models the
+	// account can actually chat with — the picker must never offer a model
+	// the request would refuse.
+	const verified = await Promise.all(candidates.map(async (entry) => {
+		const endpoints = Array.isArray(entry.supported_endpoints) ? entry.supported_endpoints : [];
+		let path;
+		let payload;
+		if (endpoints.includes("/v1/messages")) {
+			path = "/v1/messages";
+			payload = { model: entry.id, max_tokens: 1, messages: [{ role: "user", content: "hi" }] };
+		} else if (endpoints.includes("/responses")) {
+			path = "/responses";
+			payload = { model: entry.id, input: "hi", max_output_tokens: 1 };
+		} else {
+			path = "/chat/completions";
+			payload = { model: entry.id, messages: [{ role: "user", content: "hi" }], max_tokens: 1 };
+		}
+		try {
+			const probe = await fetch(`${baseURL}${path}`, {
+				method: "POST",
+				headers: {
+					"authorization": `Bearer ${apiKey}`,
+					"content-type": "application/json",
+					...COPILOT_HEADERS,
+					"X-GitHub-Api-Version": "2026-06-01",
+					"Openai-Intent": "conversation-edits",
+					"X-Initiator": "user"
+				},
+				body: JSON.stringify(payload),
+				signal: AbortSignal.timeout(20000)
+			});
+			return probe.ok ? entry : void 0;
+		} catch {
+			return void 0;
+		}
+	}));
+	return verified.filter((entry) => entry !== void 0).map((entry) => {
 		const known = piModels.getModel(piProviderId, entry.id);
 		const limits = entry.capabilities?.limits;
 		const supports = entry.capabilities?.supports;

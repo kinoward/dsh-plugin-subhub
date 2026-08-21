@@ -1348,6 +1348,21 @@ var OpenAIAdapter = class extends LlmAdapter {
 			};
 		});
 	}
+	/**
+	 * Bind exact model metadata and the eventual request dispatch to one
+	 * adapter generation, so settings changes between preparation and
+	 * dispatch cannot combine one generation's capabilities with another's
+	 * endpoint. The harness runtime has called this on adapters since rc.8
+	 * (the LlmAdapter base gained a default then); the method is defined
+	 * here explicitly so the plugin keeps working when its peer dependency
+	 * resolves to the pre-rc.8 base that lacks it.
+	 */
+	async prepareCall(provider, model, signal) {
+		return {
+			model: await this.resolveModel(provider, model, signal),
+			stream: (options) => this.stream(options)
+		};
+	}
 	async *stream(options) {
 		const connection = this.config.options();
 		const auth = await this.config.tokenStore.getToken();
