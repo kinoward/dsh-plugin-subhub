@@ -71,7 +71,7 @@ async function oauthClientSecret() {
 }
 const OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const OAUTH_SCOPES = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile";
+const OAUTH_SCOPES = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/generative-language";
 const OAUTH_CALLBACK_PATH = "/oauth2callback";
 /** Login flows live at most this long before their servers close. */
 const LOGIN_TIMEOUT_MS = 15 * 60 * 1000;
@@ -327,6 +327,11 @@ function registerGoogle(ctx, config) {
 		reasoningEffort: true,
 		login: loginGoogle,
 		resolveApiKey,
+		// The Google GenAI SDK sends `x-goog-api-key` for the apiKey option,
+		// which rejects OAuth access tokens ("API key not valid"). When the
+		// request headers already carry `authorization`, the SDK omits the
+		// api-key header, so the subscription token rides Bearer auth.
+		authorizationHeader: (token) => ({ authorization: `Bearer ${token}` }),
 		displayName: (lang) => lang === "en" ? "Gemini subscription" : "Gemini 订阅"
 	});
 }

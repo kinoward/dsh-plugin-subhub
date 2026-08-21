@@ -82,12 +82,17 @@ function fallbackDescriptors(piModels, piProvider) {
 		...Number.isInteger(model.contextWindow) && model.contextWindow > 0 ? { contextWindow: model.contextWindow } : {}
 	}));
 }
-/** Whether the Copilot account can actually select this model in the picker. */
+/** Whether the Copilot account can actually use this model in chat. */
 function isSelectableCopilotModel(item) {
 	const policy = item?.policy;
 	const capabilities = item?.capabilities;
 	const supports = capabilities?.supports;
-	return item.model_picker_enabled === true && policy?.state !== "disabled" && supports?.tool_calls !== false;
+	// `model_picker_enabled` is false even for chat-usable models on some
+	// accounts, while `policy.state === "enabled"` marks exactly the models
+	// the chat endpoint accepts (verified against the individual API: an
+	// enabled model like gpt-4.1 answers chat requests; the old gate fell
+	// back to the static list of stale ids the API rejects).
+	return policy?.state === "enabled" && supports?.tool_calls !== false;
 }
 /**
  * Fetch the account's model catalog from the Copilot chat proxy. Only
@@ -112,16 +117,21 @@ async function liveCatalog(config, apiKey, piProviderId, piModels) {
 	return raw.filter((entry) => typeof entry?.id === "string" && isSelectableCopilotModel(entry)).map((entry) => {
 		const known = piModels.getModel(piProviderId, entry.id);
 		const limits = entry.capabilities?.limits;
+		const supports = entry.capabilities?.supports;
+		const endpoints = Array.isArray(entry.supported_endpoints) ? entry.supported_endpoints : [];
+		// Known models keep pi-ai's wire protocol; unknown live ids pick the
+		// protocol the endpoint declares (responses-only models cannot talk
+		// completions).
+		const api = known?.api ?? (endpoints.includes("/v1/messages") ? "anthropic-messages" : endpoints.includes("/responses") ? "openai-responses" : "openai-completions");
 		const contextWindow = Number.isInteger(limits?.max_context_window_tokens) && limits.max_context_window_tokens > 0 ? limits.max_context_window_tokens : Number.isInteger(known?.contextWindow) && known.contextWindow > 0 ? known.contextWindow : void 0;
 		return {
 			id: entry.id,
 			name: typeof entry.name === "string" && entry.name.length > 0 ? entry.name : entry.id,
-			// Known models keep pi-ai's wire protocol; unknown live ids
-			// dispatch through the completions template.
-			api: known?.api ?? "openai-completions",
+			api,
 			// Capability fields never fabricated: known models reuse pi-ai's
-			// declared input modalities, unknown ones stay text-only.
-			...(known !== void 0 && Array.isArray(known.input) ? { inputModalities: known.input.filter((modality) => modality === "text" || modality === "image") } : { inputModalities: ["text"] }),
+			// declared input modalities, unknown live ids follow the
+			// endpoint's vision flag.
+			...(known !== void 0 && Array.isArray(known.input) ? { inputModalities: known.input.filter((modality) => modality === "text" || modality === "image") } : supports?.vision === true ? { inputModalities: ["text", "image"] } : { inputModalities: ["text"] }),
 			...contextWindow === void 0 ? {} : { contextWindow }
 		};
 	});
