@@ -88,6 +88,7 @@ window.__ModuleLoader__.load({
 			loginButtonAgain: "使用新账号登录",
 			modelsTitle: "可用模型",
 			modelsMeta: "来自 {name} · 共 {count} 个模型 · 实时同步",
+			modelsMetaOne: "来自 {name} · 共 1 个模型 · 实时同步",
 			modelsLoading: "正在读取模型列表…",
 			modelsError: "无法读取模型列表:{message}",
 			modelsEmpty: "暂无可用模型。",
@@ -146,6 +147,7 @@ window.__ModuleLoader__.load({
 			loginButtonAgain: "Sign in with a different account",
 			modelsTitle: "Available models",
 			modelsMeta: "From {name} · {count} models · synced live",
+			modelsMetaOne: "From {name} · 1 model · synced live",
 			modelsLoading: "Reading the model list…",
 			modelsError: "Could not read the model list: {message}",
 			modelsEmpty: "No models are available.",
@@ -411,7 +413,9 @@ window.__ModuleLoader__.load({
 			}
 			const meta = document.createElement("span");
 			meta.className = "dsh-plugin-sub-catalog-meta";
-			meta.textContent = t("modelsMeta", { name: providerName, count: models.length });
+			const count = models.length;
+			const label = count === 1 ? t("modelsMetaOne", { name: providerName, count }) : t("modelsMeta", { name: providerName, count });
+			meta.textContent = label;
 			head.appendChild(meta);
 			const list = document.createElement("div");
 			list.className = "dsh-plugin-sub-catalog-list";
