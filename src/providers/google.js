@@ -30,17 +30,44 @@ const NS = settingsNamespace("dsh-plugin-subhub-google");
 const SUBSCRIPTION_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 /**
  * OAuth client of the official gemini-cli, public in its source. The
- * client id ships verbatim; the client secret is read from the
- * environment because this repository's push protection forbids
- * committing it — the public value lives in the official gemini-cli
- * source (packages/core/src/code_assist/oauth2.ts). The subscription
- * token it mints only ever rides the requests above.
+ * client id ships verbatim; the public client secret is resolved at
+ * sign-in time — an explicit env override first, otherwise fetched from
+ * the official gemini-cli source (packages/core/src/code_assist/oauth2.ts)
+ * because this repository's push protection forbids committing the
+ * literal. The subscription token it mints only ever rides the requests
+ * above.
  */
 const OAUTH_CLIENT_ID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com";
-function oauthClientSecret() {
-	const secret = process.env.GEMINI_OAUTH_CLIENT_SECRET ?? process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-	if (typeof secret !== "string" || secret.length === 0) throw new LlmError("google: GEMINI_OAUTH_CLIENT_SECRET is not set; export the public client secret from the official gemini-cli source (packages/core/src/code_assist/oauth2.ts)", "MISSING_CREDENTIAL");
-	return secret;
+/** The official gemini-cli source that ships the public client secret. */
+const GEMINI_CLI_OAUTH2_SOURCE = "https://raw.githubusercontent.com/google-gemini/gemini-cli/main/packages/core/src/code_assist/oauth2.ts";
+/** In-process cache: the gemini-cli secret only changes on its releases. */
+let fetchedClientSecret;
+/**
+ * The OAuth client secret of the official gemini-cli client. Google embeds
+ * it publicly in the open-source CLI (their own comment: installed
+ * applications treat it as public), and it differs from the value Google's
+ * token endpoint would accept for any other deployment — a missing or wrong
+ * secret is refused. An explicit env override wins; otherwise the public
+ * value is fetched from the official source at sign-in time (this
+ * repository's push protection forbids committing the literal).
+ */
+async function oauthClientSecret() {
+	const explicit = process.env.GEMINI_OAUTH_CLIENT_SECRET ?? process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+	if (typeof explicit === "string" && explicit.length > 0) return explicit;
+	if (fetchedClientSecret !== void 0) return fetchedClientSecret;
+	try {
+		const response = await fetch(GEMINI_CLI_OAUTH2_SOURCE, { signal: AbortSignal.timeout(8000) });
+		if (!response.ok) throw new Error(`source fetch failed (HTTP ${response.status})`);
+		const source = await response.text();
+		const match = source.match(/OAUTH_CLIENT_SECRET = '([^']+)'/);
+		if (match !== null && match[1].length > 0) {
+			fetchedClientSecret = match[1];
+			return fetchedClientSecret;
+		}
+		throw new Error("client secret declaration not found in the source");
+	} catch (error) {
+		throw new LlmError(`google: cannot resolve the OAuth client secret (${error?.message ?? error}); export GEMINI_OAUTH_CLIENT_SECRET (or GOOGLE_OAUTH_CLIENT_SECRET) with the public client secret from the official gemini-cli source (packages/core/src/code_assist/oauth2.ts)`, "MISSING_CREDENTIAL");
+	}
 }
 const OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -151,7 +178,7 @@ async function exchangeCode(code, redirectUri, verifier, signal) {
 		body: new URLSearchParams({
 			code,
 			client_id: OAUTH_CLIENT_ID,
-			client_secret: oauthClientSecret(),
+			client_secret: await oauthClientSecret(),
 			redirect_uri: redirectUri,
 			grant_type: "authorization_code",
 			code_verifier: verifier
@@ -203,7 +230,7 @@ async function refreshGoogle(credential) {
 		body: new URLSearchParams({
 			grant_type: "refresh_token",
 			client_id: OAUTH_CLIENT_ID,
-			client_secret: oauthClientSecret(),
+			client_secret: await oauthClientSecret(),
 			refresh_token: credential.refresh
 		}).toString()
 	});

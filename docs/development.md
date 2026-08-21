@@ -104,7 +104,7 @@ node login.js
 | 6 | 思考深度不可选 | M1 曾整体关闭档位;线协议模板的 `thinkingLevelMap` 缺账户目录声明的档,会把 xhigh 悄悄降级为 high | 档位从账户目录声明动态生成;`thinkingLevelMap` 用目录档位覆盖模板;默认档取目录声明 |
 | 7 | 登录弹窗/目录文案写死 ChatGPT,其它服务也显示 ChatGPT | 共享文案未参数化 | 共享文案用 `{name}` 参数化,取当前服务显示名(`src/client.js`) |
 | 8 | 后端拒绝 off 档(HTTP 400 invalid reasoning effort) | 该模型没有关闭档,目录也未声明 | Off 仅在目录声明时展示;目录只声明 high/xhigh 时就只显示这两档(低→高) |
-| 9 | 推送被仓库规则拦截(repository rule violations) | 代码内嵌了 Google OAuth client secret(`GOCSPX-` 触发密钥保护) | 机密一律走环境变量(见 `src/providers/google.js` 的 `GEMINI_OAUTH_CLIENT_SECRET`);公开 client id 可以入库 |
+| 9 | 推送被仓库规则拦截(repository rule violations) | 代码内嵌了 Google OAuth client secret(`GOCSPX-` 触发密钥保护) | `GOCSPX-` 字面量一律不进仓库:gemini-cli 的公开 client secret 在登录时从官方源(`google-gemini/gemini-cli` 的 `packages/core/src/code_assist/oauth2.ts`)运行时读取,`GEMINI_OAUTH_CLIENT_SECRET`/`GOOGLE_OAUTH_CLIENT_SECRET` 仅作显式覆盖(见 `src/providers/google.js` 的 `oauthClientSecret`);公开 client id 可以入库 |
 | 10 | API-key 类服务与外壳内置目录重复 | harness 的「模型」页「Add provider」已原生内置 `minimax-cn`/`qwen-token-plan-cn`/`openrouter` 等 API-key 路由(同端点、同凭据方式) | 重复的服务不接入;产品方向定为「仅 OAuth 订阅」后,插件侧的密钥类实现(MiniMax/阿里百炼/OpenRouter/火山方舟)已全部移除(见 `AGENTS.md` 接入规范第 4 条) |
 | 11 | 自定义 pi-ai provider 流式请求报 `Unknown provider: undefined` 或 `Cannot read properties of undefined (reading 'includes' / 'tiers')` | `createProvider` 的模型条目可能不带 `provider`/`baseUrl`/`contextWindow`/`maxTokens`/`cost` 字段,而 pi-ai 的派发、上下文钳制与费用统计都依赖它们 | `piModelFor` 克隆时补齐这些字段:`provider` 恒为当前 pi-ai provider id;`contextWindow` 取在线目录 → 模板 → 配置默认(否则钳制出 NaN);`maxTokens` 兜底 8192;`cost` 兜底全零(`src/piai.js`) |
 | 12 | 密钥类服务的模型页无目录行(历史) | 验证脚本把 `settings.yaml` 放错位置(profile 子目录),设置未加载 | harness 的 settings 文件在 `DSH_HOME/settings.yaml`(harness home 根),不在 `profiles/<name>/` 下 |
