@@ -1060,15 +1060,19 @@ var PiAiSubscriptionAdapter = class extends LlmAdapter {
 		const effort = options.reasoningEffort !== void 0 && options.reasoningEffort !== "off" ? options.reasoningEffort : void 0;
 		// Hand-rolled OAuth providers (Google) resolve their own access token
 		// and hand it to pi-ai as the request's apiKey override; providers
-		// riding pi-ai's bundled OAuth resolve through the Models store.
+		// riding pi-ai's bundled OAuth resolve through the Models store. APIs
+		// that only accept the OAuth token as a Bearer authorization header
+		// (the Google GenAI SDK omits x-goog-api-key when authorization is
+		// present) declare `authorizationHeader` to move the token there.
 		const apiKey = this.config.resolveApiKey !== void 0 ? await this.config.resolveApiKey() : void 0;
+		const authHeaders = this.config.authorizationHeader !== void 0 && apiKey !== void 0 ? this.config.authorizationHeader(apiKey) : {};
 		const iterator = toStreamChunks(this.config.piModels.streamSimple(model, context, {
 			...effort !== void 0 && this.config.reasoningEffort !== false ? { reasoning: effort } : {},
 			...options.temperature !== void 0 ? { temperature: options.temperature } : {},
 			...options.maxTokens !== void 0 ? { maxTokens: options.maxTokens } : {},
 			...apiKey !== void 0 ? { apiKey } : {},
 			signal: watchdog.signal,
-			headers: attributionHeaders()
+			headers: { ...attributionHeaders(), ...authHeaders }
 		}), model.contextWindow)[Symbol.asyncIterator]();
 		let exhausted = false;
 		try {
@@ -1239,6 +1243,7 @@ function registerSubscriptionProvider(ctx, config, spec) {
 		piProviderId: piProvider.id,
 		reasoningEffort: spec.reasoningEffort,
 		modelHeaders: spec.modelHeaders,
+		authorizationHeader: spec.authorizationHeader,
 		getLiveEntry: catalogCache.getLiveEntry,
 		fallbackDescriptors: spec.fallbackDescriptors(piModels, piProvider),
 		resolveAttachments: () => attachments ?? ctx.get("attachments"),
