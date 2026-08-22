@@ -23,7 +23,7 @@
 
 把**第三方订阅账户**接入 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，使用订阅覆盖的模型进行对话：文字对话、图片理解、图片生成与图片编辑。
 
-**目前支持 OpenAI（ChatGPT）、xAI（Grok）、GitHub Copilot、Kimi Code 订阅——全部通过浏览器授权登录你的订阅账户。密钥类服务 DeepSeek Harness 已内置，请直接在「模型」页添加。**
+**目前支持 OpenAI（ChatGPT）、xAI（Grok）、GitHub Copilot 订阅——全部通过浏览器授权登录你的订阅账户。密钥类服务 DeepSeek Harness 已内置，请直接在「模型」页添加。**
 
 > 可用模型、使用额度和响应速度由订阅服务商及你的账户决定。服务商调整服务后，部分功能可能暂时不可用。
 

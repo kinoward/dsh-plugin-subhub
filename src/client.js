@@ -60,8 +60,6 @@ window.__ModuleLoader__.load({
 			xaiDesc: "Grok 系列模型,使用 SuperGrok 或 X Premium+ 账户登录。",
 			githubName: "GitHub Copilot",
 			githubDesc: "Copilot 订阅内的 GPT / Claude / Gemini 等模型,使用 GitHub 账户登录。",
-			kimiName: "Kimi Code 订阅",
-			kimiDesc: "K3 / Kimi For Coding 等模型,使用 Kimi Code 订阅账户登录。",
 			moreComing: "其他服务即将接入,敬请期待。",
 			modalTitle: "登录 {name}",
 			modalDesc: "在浏览器中完成一次性设备授权,登录成功后此页面自动同步。",
@@ -115,8 +113,6 @@ window.__ModuleLoader__.load({
 			xaiDesc: "Grok models, signed in with a SuperGrok or X Premium+ account.",
 			githubName: "GitHub Copilot",
 			githubDesc: "GPT, Claude, Gemini and other models in your Copilot subscription, signed in with a GitHub account.",
-			kimiName: "Kimi Code subscription",
-			kimiDesc: "K3, Kimi For Coding and other models, signed in with a Kimi Code subscription account.",
 			moreComing: "More providers are on the way. Stay tuned.",
 			modalTitle: "Sign in to {name}",
 			modalDesc: "Complete a one-time device authorization in the browser; this page syncs automatically after sign-in.",
@@ -276,18 +272,6 @@ window.__ModuleLoader__.load({
 				"aria-hidden": "true"
 			}, h("path", {
 				d: "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
-			}));
-		}
-		/** Inline Kimi logomark (official brand path, drawn in currentColor). */
-		function KimiLogo({ size = 16 }) {
-			return h("svg", {
-				width: size,
-				height: size,
-				viewBox: "0 0 24 24",
-				fill: "currentColor",
-				"aria-hidden": "true"
-			}, h("path", {
-				d: "M21.765.351C22.998.351 24 1.353 24 2.586S22.998 4.82 21.765 4.82h-1.974c-.15 0-.26-.12-.26-.26V2.586A2.237 2.237 0 0 1 21.765.35M9.41 13.388l8.447-8.377c.16-.16.07-.471-.14-.471h-4.55s-.1.02-.14.06l-9.099 9.029c-.14.14-.35.02-.35-.21V4.81c0-.15-.1-.27-.221-.27H.22c-.12 0-.22.12-.22.27v18.57c0 .15.1.27.22.27h3.137c.12 0 .22-.12.22-.27v-3.79c0-.08.03-.16.08-.21l2.826-2.796c.07-.07.16-.08.241-.03l7.546 5.551a8.9 8.9 0 0 0 4.018 1.493c.12.01.23-.11.23-.27V19.76c0-.14-.08-.25-.19-.26a5.8 5.8 0 0 1-2.355-.942l-6.533-4.73c-.14-.09-.15-.32-.03-.441"
 			}));
 		}
 		/** Shell-style copy button with one-second "copied" feedback. */
@@ -456,8 +440,7 @@ window.__ModuleLoader__.load({
 			const SUBSCRIPTION_ROWS = [
 				{ names: [zh.openaiName, en.openaiName], apiBase: API },
 				{ names: [zh.xaiName, en.xaiName], apiBase: `${API}/xai` },
-				{ names: [zh.githubName, en.githubName], apiBase: `${API}/github` },
-				{ names: [zh.kimiName, en.kimiName], apiBase: `${API}/kimi` }
+				{ names: [zh.githubName, en.githubName], apiBase: `${API}/github` }
 			];
 			const matchProvider = (name) => SUBSCRIPTION_ROWS.find((entry) => entry.names.includes(name));
 			const CHEVRON_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6 L8 10 L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -919,13 +902,6 @@ window.__ModuleLoader__.load({
 					descKey: "githubDesc",
 					logo: h(GitHubLogo, { size: 16 }),
 					apiBase: `${API}/github`
-				},
-				{
-					id: "dsh-plugin-subhub-kimi",
-					nameKey: "kimiName",
-					descKey: "kimiDesc",
-					logo: h(KimiLogo, { size: 16 }),
-					apiBase: `${API}/kimi`
 				}
 			];
 			return h("div", { className: "dsh-plugin-sub-root" }, [
