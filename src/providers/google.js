@@ -36,8 +36,23 @@ const SUBSCRIPTION_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
  * because this repository's push protection forbids committing the
  * literal. The subscription token it mints only ever rides the requests
  * above.
+ *
+ * The gemini-cli client's consent is scoped to Google Cloud Code and its
+ * tokens are refused by the Generative Language API (403
+ * ACCESS_TOKEN_SCOPE_INSUFFICIENT; the scope Google registers for that
+ * client is not grantable). Subscription access therefore needs a
+ * personal Google Cloud OAuth "Desktop app" client: set
+ * GEMINI_OAUTH_CLIENT_ID (and GEMINI_OAUTH_CLIENT_SECRET /
+ * GOOGLE_OAUTH_CLIENT_SECRET) to override the client identity and enable
+ * the API in that project. The default client remains a best-effort
+ * fallback whose tokens only authorize Cloud Code style requestors.
  */
-const OAUTH_CLIENT_ID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com";
+const DEFAULT_OAUTH_CLIENT_ID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com";
+/** A user-supplied client identity replaces the gemini-cli one for the whole flow. */
+function oauthClientId() {
+	const explicit = process.env.GEMINI_OAUTH_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID;
+	return typeof explicit === "string" && explicit.length > 0 ? explicit : DEFAULT_OAUTH_CLIENT_ID;
+}
 /** The official gemini-cli source that ships the public client secret. */
 const GEMINI_CLI_OAUTH2_SOURCE = "https://raw.githubusercontent.com/google-gemini/gemini-cli/main/packages/core/src/code_assist/oauth2.ts";
 /** In-process cache: the gemini-cli secret only changes on its releases. */
@@ -71,7 +86,7 @@ async function oauthClientSecret() {
 }
 const OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const OAUTH_SCOPES = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/generative-language";
+const OAUTH_SCOPES = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile";
 const OAUTH_CALLBACK_PATH = "/oauth2callback";
 /** Login flows live at most this long before their servers close. */
 const LOGIN_TIMEOUT_MS = 15 * 60 * 1000;
@@ -177,7 +192,7 @@ async function exchangeCode(code, redirectUri, verifier, signal) {
 		headers: { "content-type": "application/x-www-form-urlencoded" },
 		body: new URLSearchParams({
 			code,
-			client_id: OAUTH_CLIENT_ID,
+			client_id: oauthClientId(),
 			client_secret: await oauthClientSecret(),
 			redirect_uri: redirectUri,
 			grant_type: "authorization_code",
@@ -202,7 +217,7 @@ async function loginGoogle(interaction) {
 	const { port, wait } = await startCallbackServer(interaction.signal);
 	const redirectUri = `http://127.0.0.1:${port}${OAUTH_CALLBACK_PATH}`;
 	const params = new URLSearchParams({
-		client_id: OAUTH_CLIENT_ID,
+		client_id: oauthClientId(),
 		response_type: "code",
 		scope: OAUTH_SCOPES,
 		access_type: "offline",
@@ -229,7 +244,7 @@ async function refreshGoogle(credential) {
 		headers: { "content-type": "application/x-www-form-urlencoded" },
 		body: new URLSearchParams({
 			grant_type: "refresh_token",
-			client_id: OAUTH_CLIENT_ID,
+			client_id: oauthClientId(),
 			client_secret: await oauthClientSecret(),
 			refresh_token: credential.refresh
 		}).toString()

@@ -108,6 +108,7 @@ node login.js
 | 10 | API-key 类服务与外壳内置目录重复 | harness 的「模型」页「Add provider」已原生内置 `minimax-cn`/`qwen-token-plan-cn`/`openrouter` 等 API-key 路由(同端点、同凭据方式) | 重复的服务不接入;产品方向定为「仅 OAuth 订阅」后,插件侧的密钥类实现(MiniMax/阿里百炼/OpenRouter/火山方舟)已全部移除(见 `AGENTS.md` 接入规范第 4 条) |
 | 11 | 自定义 pi-ai provider 流式请求报 `Unknown provider: undefined` 或 `Cannot read properties of undefined (reading 'includes' / 'tiers')` | `createProvider` 的模型条目可能不带 `provider`/`baseUrl`/`contextWindow`/`maxTokens`/`cost` 字段,而 pi-ai 的派发、上下文钳制与费用统计都依赖它们 | `piModelFor` 克隆时补齐这些字段:`provider` 恒为当前 pi-ai provider id;`contextWindow` 取在线目录 → 模板 → 配置默认(否则钳制出 NaN);`maxTokens` 兜底 8192;`cost` 兜底全零(`src/piai.js`) |
 | 12 | 密钥类服务的模型页无目录行(历史) | 验证脚本把 `settings.yaml` 放错位置(profile 子目录),设置未加载 | harness 的 settings 文件在 `DSH_HOME/settings.yaml`(harness home 根),不在 `profiles/<name>/` 下 |
+| 13 | Gemini 授权页报 `403 restricted_client: Unregistered scope(s): generative-language`,或订阅请求 `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT` | gemini-cli 的 OAuth 客户端只注册了 Cloud Code 作用域,Google 拒绝为其声明 generative-language 作用域;其令牌对 Generative Language API 无访问权 | 订阅访问需自建 Google Cloud「Desktop app」OAuth 客户端(项目内启用 Generative Language API),用 `GEMINI_OAUTH_CLIENT_ID` / `GEMINI_OAUTH_CLIENT_SECRET` 覆盖客户端身份;默认客户端仅作 Cloud Code 最佳努力回退(见 `src/providers/google.js`) |
 
 ### 真实账户最小验证配方
 

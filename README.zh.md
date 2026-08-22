@@ -27,6 +27,8 @@
 
 > 可用模型、使用额度和响应速度由订阅服务商及你的账户决定。服务商调整服务后，部分功能可能暂时不可用。
 
+> Gemini 订阅调用需要个人 Google Cloud OAuth 客户端:在 Google Cloud 控制台创建「Desktop app」客户端(同一项目内启用 Generative Language API),登录前导出 `GEMINI_OAUTH_CLIENT_ID` 与 `GEMINI_OAUTH_CLIENT_SECRET`。未配置时插件回退到公开的 gemini-cli 客户端,其令牌仅授权 Cloud Code 类请求。
+
 ## 安装
 
 - 已安装 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`），Node.js 22.19 或更高版本。
