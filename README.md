@@ -23,11 +23,9 @@
 
 Bring a **third-party subscription account** into [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and chat with the models your subscription covers: text chat, image understanding, image generation, and image editing.
 
-**Supported today: OpenAI / ChatGPT, xAI (Grok), GitHub Copilot, Claude, Gemini, and Kimi Code subscriptions — all signed in with your subscription account through browser authorization. Key-based services are already built into DeepSeek Harness — add them on its Models page.**
+**Supported today: OpenAI / ChatGPT, xAI (Grok), GitHub Copilot, and Kimi Code subscriptions — all signed in with your subscription account through browser authorization. Key-based services are already built into DeepSeek Harness — add them on its Models page.**
 
 > Model availability, usage limits, and response speed are decided by the subscription provider and your account. Some features may become temporarily unavailable after the provider changes its service.
-
-> Gemini subscription calls require a personal Google Cloud OAuth client: create a "Desktop app" client (with the Generative Language API enabled in the same project) and export `GEMINI_OAUTH_CLIENT_ID` and `GEMINI_OAUTH_CLIENT_SECRET` before signing in. Without it the plugin falls back to the public gemini-cli client, whose tokens only authorize Cloud Code-style requests.
 
 ## Install
 

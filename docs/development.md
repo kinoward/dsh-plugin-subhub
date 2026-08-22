@@ -104,11 +104,11 @@ node login.js
 | 6 | 思考深度不可选 | M1 曾整体关闭档位;线协议模板的 `thinkingLevelMap` 缺账户目录声明的档,会把 xhigh 悄悄降级为 high | 档位从账户目录声明动态生成;`thinkingLevelMap` 用目录档位覆盖模板;默认档取目录声明 |
 | 7 | 登录弹窗/目录文案写死 ChatGPT,其它服务也显示 ChatGPT | 共享文案未参数化 | 共享文案用 `{name}` 参数化,取当前服务显示名(`src/client.js`) |
 | 8 | 后端拒绝 off 档(HTTP 400 invalid reasoning effort) | 该模型没有关闭档,目录也未声明 | Off 仅在目录声明时展示;目录只声明 high/xhigh 时就只显示这两档(低→高) |
-| 9 | 推送被仓库规则拦截(repository rule violations) | 代码内嵌了 Google OAuth client secret(`GOCSPX-` 触发密钥保护) | `GOCSPX-` 字面量一律不进仓库:gemini-cli 的公开 client secret 在登录时从官方源(`google-gemini/gemini-cli` 的 `packages/core/src/code_assist/oauth2.ts`)运行时读取,`GEMINI_OAUTH_CLIENT_SECRET`/`GOOGLE_OAUTH_CLIENT_SECRET` 仅作显式覆盖(见 `src/providers/google.js` 的 `oauthClientSecret`);公开 client id 可以入库 |
+| 9 | 推送被仓库规则拦截(repository rule violations) | 代码内嵌了 Google OAuth client secret(`GOCSPX-` 触发密钥保护) | `GOCSPX-` 字面量一律不进仓库:公开 client secret 在运行时从官方源读取或经环境变量 `*_OAUTH_CLIENT_SECRET` 提供;公开 client id 可以入库 |
 | 10 | API-key 类服务与外壳内置目录重复 | harness 的「模型」页「Add provider」已原生内置 `minimax-cn`/`qwen-token-plan-cn`/`openrouter` 等 API-key 路由(同端点、同凭据方式) | 重复的服务不接入;产品方向定为「仅 OAuth 订阅」后,插件侧的密钥类实现(MiniMax/阿里百炼/OpenRouter/火山方舟)已全部移除(见 `AGENTS.md` 接入规范第 4 条) |
 | 11 | 自定义 pi-ai provider 流式请求报 `Unknown provider: undefined` 或 `Cannot read properties of undefined (reading 'includes' / 'tiers')` | `createProvider` 的模型条目可能不带 `provider`/`baseUrl`/`contextWindow`/`maxTokens`/`cost` 字段,而 pi-ai 的派发、上下文钳制与费用统计都依赖它们 | `piModelFor` 克隆时补齐这些字段:`provider` 恒为当前 pi-ai provider id;`contextWindow` 取在线目录 → 模板 → 配置默认(否则钳制出 NaN);`maxTokens` 兜底 8192;`cost` 兜底全零(`src/piai.js`) |
 | 12 | 密钥类服务的模型页无目录行(历史) | 验证脚本把 `settings.yaml` 放错位置(profile 子目录),设置未加载 | harness 的 settings 文件在 `DSH_HOME/settings.yaml`(harness home 根),不在 `profiles/<name>/` 下 |
-| 13 | Gemini 授权页报 `403 restricted_client: Unregistered scope(s): generative-language`,或订阅请求 `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT` | gemini-cli 的 OAuth 客户端只注册了 Cloud Code 作用域,Google 拒绝为其声明 generative-language 作用域;其令牌对 Generative Language API 无访问权 | 订阅访问需自建 Google Cloud「Desktop app」OAuth 客户端(项目内启用 Generative Language API),用 `GEMINI_OAUTH_CLIENT_ID` / `GEMINI_OAUTH_CLIENT_SECRET` 覆盖客户端身份;默认客户端仅作 Cloud Code 最佳努力回退(见 `src/providers/google.js`) |
+| 13 | 第三方 OAuth 客户端不能声明未注册作用域(Google `403 restricted_client: Unregistered scope(s)`)且其令牌被目标 API 拒绝(`ACCESS_TOKEN_SCOPE_INSUFFICIENT`) | 客户端(如 gemini-cli 的应用 ID)只注册了自身用途的作用域;为它追加其它作用域会被授权页拒绝,令牌也没有目标 API 的访问权 | 第三方订阅访问需服务商官方路径的 OAuth 客户端:自建 Google Cloud「Desktop app」客户端(项目内启用 Generative Language API),经环境变量覆盖客户端身份(`*_OAUTH_CLIENT_ID`/`*_OAUTH_CLIENT_SECRET`);接入前先核实「官方客户端的作用域是否覆盖目标 API」(Gemini/Claude 已按产品决策移除,本教训保留) |
 
 ### 真实账户最小验证配方
 

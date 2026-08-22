@@ -23,11 +23,9 @@
 
 把**第三方订阅账户**接入 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，使用订阅覆盖的模型进行对话：文字对话、图片理解、图片生成与图片编辑。
 
-**目前支持 OpenAI（ChatGPT）、xAI（Grok）、GitHub Copilot、Claude、Gemini、Kimi Code 订阅——全部通过浏览器授权登录你的订阅账户。密钥类服务 DeepSeek Harness 已内置，请直接在「模型」页添加。**
+**目前支持 OpenAI（ChatGPT）、xAI（Grok）、GitHub Copilot、Kimi Code 订阅——全部通过浏览器授权登录你的订阅账户。密钥类服务 DeepSeek Harness 已内置，请直接在「模型」页添加。**
 
 > 可用模型、使用额度和响应速度由订阅服务商及你的账户决定。服务商调整服务后，部分功能可能暂时不可用。
-
-> Gemini 订阅调用需要个人 Google Cloud OAuth 客户端:在 Google Cloud 控制台创建「Desktop app」客户端(同一项目内启用 Generative Language API),登录前导出 `GEMINI_OAUTH_CLIENT_ID` 与 `GEMINI_OAUTH_CLIENT_SECRET`。未配置时插件回退到公开的 gemini-cli 客户端,其令牌仅授权 Cloud Code 类请求。
 
 ## 安装
 

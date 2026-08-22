@@ -60,10 +60,6 @@ window.__ModuleLoader__.load({
 			xaiDesc: "Grok 系列模型,使用 SuperGrok 或 X Premium+ 账户登录。",
 			githubName: "GitHub Copilot",
 			githubDesc: "Copilot 订阅内的 GPT / Claude / Gemini 等模型,使用 GitHub 账户登录。",
-			anthropicName: "Claude 订阅",
-			anthropicDesc: "Claude 系列模型,使用 Claude Pro / Max 订阅账户登录。",
-			geminiName: "Gemini 订阅",
-			geminiDesc: "Gemini 系列模型,使用 Google AI Pro / Ultra 订阅账户登录。",
 			kimiName: "Kimi Code 订阅",
 			kimiDesc: "K3 / Kimi For Coding 等模型,使用 Kimi Code 订阅账户登录。",
 			moreComing: "其他服务即将接入,敬请期待。",
@@ -119,10 +115,6 @@ window.__ModuleLoader__.load({
 			xaiDesc: "Grok models, signed in with a SuperGrok or X Premium+ account.",
 			githubName: "GitHub Copilot",
 			githubDesc: "GPT, Claude, Gemini and other models in your Copilot subscription, signed in with a GitHub account.",
-			anthropicName: "Claude subscription",
-			anthropicDesc: "Claude models, signed in with a Claude Pro / Max subscription account.",
-			geminiName: "Gemini subscription",
-			geminiDesc: "Gemini models, signed in with a Google AI Pro / Ultra subscription account.",
 			kimiName: "Kimi Code subscription",
 			kimiDesc: "K3, Kimi For Coding and other models, signed in with a Kimi Code subscription account.",
 			moreComing: "More providers are on the way. Stay tuned.",
@@ -284,30 +276,6 @@ window.__ModuleLoader__.load({
 				"aria-hidden": "true"
 			}, h("path", {
 				d: "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
-			}));
-		}
-		/** Inline Anthropic logomark (official brand path, drawn in currentColor). */
-		function AnthropicLogo({ size = 16 }) {
-			return h("svg", {
-				width: size,
-				height: size,
-				viewBox: "0 0 24 24",
-				fill: "currentColor",
-				"aria-hidden": "true"
-			}, h("path", {
-				d: "M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z"
-			}));
-		}
-		/** Inline Google Gemini logomark (official four-point star, drawn in currentColor). */
-		function GeminiLogo({ size = 16 }) {
-			return h("svg", {
-				width: size,
-				height: size,
-				viewBox: "0 0 24 24",
-				fill: "currentColor",
-				"aria-hidden": "true"
-			}, h("path", {
-				d: "M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"
 			}));
 		}
 		/** Inline Kimi logomark (official brand path, drawn in currentColor). */
@@ -489,8 +457,6 @@ window.__ModuleLoader__.load({
 				{ names: [zh.openaiName, en.openaiName], apiBase: API },
 				{ names: [zh.xaiName, en.xaiName], apiBase: `${API}/xai` },
 				{ names: [zh.githubName, en.githubName], apiBase: `${API}/github` },
-				{ names: [zh.anthropicName, en.anthropicName], apiBase: `${API}/anthropic` },
-				{ names: [zh.geminiName, en.geminiName], apiBase: `${API}/google` },
 				{ names: [zh.kimiName, en.kimiName], apiBase: `${API}/kimi` }
 			];
 			const matchProvider = (name) => SUBSCRIPTION_ROWS.find((entry) => entry.names.includes(name));
@@ -953,20 +919,6 @@ window.__ModuleLoader__.load({
 					descKey: "githubDesc",
 					logo: h(GitHubLogo, { size: 16 }),
 					apiBase: `${API}/github`
-				},
-				{
-					id: "dsh-plugin-subhub-anthropic",
-					nameKey: "anthropicName",
-					descKey: "anthropicDesc",
-					logo: h(AnthropicLogo, { size: 16 }),
-					apiBase: `${API}/anthropic`
-				},
-				{
-					id: "dsh-plugin-subhub-google",
-					nameKey: "geminiName",
-					descKey: "geminiDesc",
-					logo: h(GeminiLogo, { size: 16 }),
-					apiBase: `${API}/google`
 				},
 				{
 					id: "dsh-plugin-subhub-kimi",
