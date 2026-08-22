@@ -21,6 +21,8 @@ import { MAX_TIMER_DELAY_MS, idleWatchdog, timeoutOf } from "@deepseek-ai/dsh-ti
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { authFilePayload, exchangeAuthorizationCode, pollAuthorizationOnce, requestUserCode } from "./device-flow.js";
+import { registerGithub } from "./providers/github.js";
+import { registerXai } from "./providers/xai.js";
 /**
  * Reasoning-effort vocabulary the OpenAI backend advertises per model through
  * `supported_reasoning_levels`. The adapter does NOT hardcode the selection:
@@ -1343,6 +1345,21 @@ var OpenAIAdapter = class extends LlmAdapter {
 			};
 		});
 	}
+	/**
+	 * Bind exact model metadata and the eventual request dispatch to one
+	 * adapter generation, so settings changes between preparation and
+	 * dispatch cannot combine one generation's capabilities with another's
+	 * endpoint. The harness runtime has called this on adapters since rc.8
+	 * (the LlmAdapter base gained a default then); the method is defined
+	 * here explicitly so the plugin keeps working when its peer dependency
+	 * resolves to the pre-rc.8 base that lacks it.
+	 */
+	async prepareCall(provider, model, signal) {
+		return {
+			model: await this.resolveModel(provider, model, signal),
+			stream: (options) => this.stream(options)
+		};
+	}
 	async *stream(options) {
 		const connection = this.config.options();
 		const auth = await this.config.tokenStore.getToken();
@@ -1827,8 +1844,9 @@ async function requestGeneratedImage(tokenStore, config, auth, prompt, size, qua
 }
 /**
  * Scan the live session log backwards for the most recent image the
- * conversation carries — a user upload or a previously generated image nested
- * in a tool result. Used as the automatic source for image edits.
+ * conversation carries — a user upload, a generated image nested in a tool
+ * result, or an echoed assistant image block. Used as the automatic source
+ * for image edits.
  * @param session - the executing agent's live session, or undefined.
  * @returns the newest image attachment ref, or undefined.
  */
@@ -1837,13 +1855,32 @@ function latestConversationImageRef(session) {
 	if (events === void 0) return void 0;
 	for (let i = events.length - 1; i >= 0; i--) {
 		const event = events[i];
-		if (event?.type !== "user/message") continue;
-		for (const block of event.data?.content ?? []) {
-			if (block?.type === "image" && block.attachment !== void 0) return block.attachment;
-			if (block?.type === "tool-result") {
+		if (event?.type === "user/message") {
+			for (const block of event.data?.content ?? []) {
+				if (block?.type === "image" && block.attachment !== void 0) return block.attachment;
+				if (block?.type === "tool-result") {
+					for (const part of block.content ?? []) {
+						if (part?.type === "image" && part.attachment !== void 0) return part.attachment;
+					}
+				}
+			}
+			continue;
+		}
+		if (event?.type === "tool/result") {
+			// Tool results are surface events carrying the result message; a
+			// generated image lives inside its tool-result blocks.
+			for (const block of event.data?.message?.content ?? []) {
+				if (block?.type !== "tool-result") continue;
 				for (const part of block.content ?? []) {
 					if (part?.type === "image" && part.attachment !== void 0) return part.attachment;
 				}
+			}
+			continue;
+		}
+		if (event?.type === "assistant/message") {
+			// Echoed tool-result images ride as assistant image blocks.
+			for (const block of event.data?.message?.content ?? []) {
+				if (block?.type === "image" && block.attachment !== void 0) return block.attachment;
 			}
 		}
 	}
@@ -2219,6 +2256,13 @@ function apply(ctx, config) {
 			handler: (req, res) => void login.handle(req, res)
 		}), "openai: login api route");
 	});
+	// Additional subscription providers ride the shared pi-ai-backed core
+	// (src/piai.js). Each spec owns its provider-specific facts; the core
+	// owns the login API, the credential file, the settings section, and
+	// the login-gated directory + adapter registration, with the same four
+	// registration triggers the OpenAI provider uses.
+	registerXai(ctx, config);
+	registerGithub(ctx, config);
 }
 //#endregion
-export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, name, resolveAdapterOptions };
+export { CHATGPT_BACKEND_BASE_URL, OpenAIAdapter, OpenAITokenStore, Config, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODELS, OPENAI_API_BASE_URL, PROVIDER, REASONING_EFFORTS, apply, applyDelegationDirective, applyImageGenerationDirective, inject, latestConversationImageRef, name, registerGithub, registerXai, resolveAdapterOptions };

@@ -20,7 +20,7 @@
 ## 用户文档边界
 
 - `README.md`(英文主文档)与 `README.zh.md`(中文镜像)只服务插件使用者,按「定位 → 安装 → 快速开始(登录/选择模型/图片使用/账户管理)→ 命令行登录 → 界面预览 → 安全与隐私 → 支持 → 许可」组织;优先写用户要点击什么、执行什么、看到什么。安全隐私小节直接写在两个 README 末尾,不另建用户文档页面。
-- **定位口径**:README 把插件定位为「第三方订阅服务接入插件」,不得写成仅支持某一家订阅;明确当前仅接入 OpenAI / ChatGPT 订阅、其余订阅服务规划中。模型、额度、可用性由对应订阅服务商与账户决定。
+- **定位口径**:README 把插件定位为「第三方订阅服务接入插件」,不得写成仅支持某一家订阅;「支持的服务」段落必须与已合入的提供商保持同步。产品方向为**仅 OAuth 认证的订阅账户**,不接入粘贴 API Key 类套餐(密钥类服务直接用 harness「模型」页的内置目录)。模型、额度、可用性由对应订阅服务商与账户决定。
 - 不在 README 展开行 id、provider 路由、内部 API 与端点、OAuth/JWT 刷新、缓存与并发锁、SSE、请求字段、附件编码、工具注册方式、源码目录职责等实现细节。稳定的维护约束写在本文件,短期实现事实留在代码及 `docs/development.md`。
 - 不在 README 写死某个外部模型当前是否可用、是否支持图片或有哪些思考档位;以界面根据账户能力显示的结果为准。
 - 用户文案避免「完全」「实时」「永不」「与官方实现等价」等无法长期保证的绝对说法。描述外部服务时明确模型、额度、限速和可用性由服务商与账户决定。
@@ -35,9 +35,20 @@
 - **本机登录边界**:网页登录 API 只接受通过 `127.0.0.1`、`localhost` 或回环地址访问的请求,不得为反向代理无条件放宽。远程场景引导使用 SSH 端口转发或独立登录脚本。
 - **适配器兼容性**:只发送目标后端支持的参数,推理档位限制在模型目录声明的选项内;当前 stop 序列和输出 token 上限的处理方式是实现细节,修改时必须验证后端兼容性。
 
+## 新订阅商接入规范(所有第三方订阅一律适用)
+
+1. **模型与思考档位必须动态获取,不得写死**——不同订阅档位可用的模型与思考深度不同,写死会导致用户升级订阅后部分模型/档位不可用。选择器只展示账户目录声明的模型与档位;静态列表仅作离线兜底,绝不替代在线结果(见「功能行为契约·模型目录」)。若服务商没有账户模型目录接口,以其官方已知模型清单为目录并保持精简,规格文件中必须写明该事实。
+2. **多思考档位按从低到高排序,首项为 Off**(仿照 deepseek 模型的设计);Off 仅在账户目录声明关闭档时展示——若后端拒绝显式 off(如 xai 实测 HTTP 400 invalid reasoning effort),只展示目录声明的档位;默认档优先取账户目录声明的默认值,其次才用配置。
+3. **声明多模态(图片输入)的模型必须实测**——以真实账户或等效往返测试覆盖「用户图片输入」与「工具结果图片」两条路径(见「功能行为契约·图片输入」),发现问题必须修复,验证通过前不得视为接入完成。
+4. **不得重复接入外壳内置目录已有的服务,且只接入 OAuth 订阅**——接入前核对 harness 的 `dsh-llm-pi-ai`(基于 pi-ai 内置目录)与「模型」页「Add provider」清单:内置已提供同一服务与同一凭据方式的(如 `minimax-cn`、`qwen-token-plan-cn`、`openrouter`、`zai-coding-cn` 的 API-key 路由),插件不再接入。插件产品方向是**仅 OAuth 认证的订阅账户**(OpenAI/xAI/GitHub),不接入任何粘贴 API Key 类的套餐;内置的 api-key 路由与插件的订阅 OAuth 登录凭据模型不同,属互补而非重复。
+
+接入清单、xAI 实战踩坑速查(版本门/指纹头、历史消息 `usage`/`stopReason`、工具结果图片回声、`latestConversationImageRef` 事件扫描等)与真实账户最小验证配方见 `docs/development.md` 的「新订阅商接入:规范与实战速查」。
+
 ## 配置兼容面
 
 - `settings.yaml` 中 `dsh-plugin-subhub-openai` 节当前识别 `authFile`、`baseURL`、`apiBaseURL`、`defaultContextWindow`、`modelsCacheTtlMs`、`defaultReasoningEffort`、`streamIdleTimeoutMs`、`enableImageTool`、`imageModel`、`retryPolicy`。其中 README 或发布说明曾面向用户公开的键属于兼容面;内部调优键可以演进,但删除或改名之前必须检查仓库历史与用户迁移影响。
+- `settings.yaml` 中 `dsh-plugin-subhub-xai` 节当前识别 `authFile`、`baseURL`、`apiBaseURL`、`defaultContextWindow`、`modelsCacheTtlMs`、`defaultReasoningEffort`、`streamIdleTimeoutMs`、`retryPolicy`;推理档位的可选值来自账户目录的 `reasoning_efforts` 声明,不在插件内写死。
+- `settings.yaml` 中 `dsh-plugin-subhub-github` 节当前识别 `authFile`、`baseURL`、`defaultContextWindow`、`modelsCacheTtlMs`、`streamIdleTimeoutMs`、`retryPolicy`(不含 `defaultReasoningEffort`,GitHub Copilot 无推理档位)。
 - `authFile` 一经显式配置,登录、刷新、状态查询与退出必须始终使用该文件;退出会删除它,因此不得暗中改读其它程序的凭据。
 - 内部端点、请求体候选形态、缓存默认毫秒数和重试步骤属于可变实现,除非升级为兼容性承诺,否则不要复制到 README。
 
@@ -45,7 +56,7 @@
 
 - `README.md`:人类文档主文件,用英文;`README.zh.md`:中文镜像,与 `README.md` 结构同步;`docs/`:人类文档,用中文。
 - `AGENTS.md`:本文件,AI 行为规范。
-- 插件本体:`src/index.js`(宿主半边)+ `src/client.js`(客户端半边)+ `src/device-flow.js`(共享设备码登录流程);挂载点 = 根 `package.json` 的 `exports` + 根 `cordis.patch.yml` 一行,行 id 与挂载模块统一 `dsh-plugin-subhub`。
+- 插件本体:`src/index.js`(宿主半边)+ `src/client.js`(客户端半边)+ `src/device-flow.js`(共享设备码登录流程);OpenAI 之外的新订阅商走 pi-ai 通用底座 `src/piai.js` + 规格文件 `src/providers/<服务商>.js`;挂载点 = 根 `package.json` 的 `exports` + 根 `cordis.patch.yml` 一行,行 id 与挂载模块统一 `dsh-plugin-subhub`。
 - `login.js`:随包登录脚本,用户从 profile 目录运行 `node node_modules/dsh-plugin-subhub/login.js`(见 README「命令行登录」小节);开发时在仓库根直接 `node login.js`。
 - 客户端两层 inject 不可混用:根 `package.json` 的 `dsh.client.inject` 是客户端 npm **包**依赖边;`src/client.js` 导出的 `inject` 是模块实际读取的 Cordis **服务**名(只用 `ctx.slots` 就写 `["slots"]`)。
 
@@ -70,11 +81,15 @@ scripts/demo-gif.mjs            维护:演示 GIF 采集脚本(Playwright 截图
 src/index.js                    插件代码(宿主半边:LLM 适配器与登录 API)
 src/client.js                   客户端半边:「第三方订阅」中心页(手写模块加载器格式)
 src/device-flow.js              共享的 OpenAI 设备码登录流程
+src/piai.js                     新增订阅商的 pi-ai 通用底座(凭据文件存储/浏览器登录控制器/pi-ai 适配器桥接/通用注册)
+src/providers/xai.js            xAI Grok 订阅规格(新服务商样板:常量/settings schema/在线与兜底模型目录/注册)
+src/providers/github.js         GitHub Copilot 订阅规格(设备码登录与账户模型目录,在线目录按实测可对话模型过滤)
 ```
 
 按需读取的最小集:
 
 - 改动宿主半边:读 `src/index.js` + 根 `package.json` 的 `exports` + `cordis.patch.yml`;
+- 新增订阅商(pi-ai 底座):读 `src/piai.js` + `src/providers/xai.js`(样板)+ `src/index.js` 的注册块 + 客户端 `src/client.js` 的卡片;
 - 改动客户端半边:读 `src/client.js` + 根 `package.json` 的 `dsh.client`;
 - 改动集合层(清单/补丁/依赖):读根 `package.json` 与 `cordis.patch.yml`;
 - 改动文档:只读目标文档本身;
