@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [v1.8.1] - 2026-08-21
 
-The subscription hub now covers more providers end to end: xAI / Grok (already shipped since v1.0.x, hardened with catalog-driven wire protocol and reasoning levels), GitHub Copilot, Claude, Gemini, and Kimi Code subscriptions, plus the Volcengine Ark Coding Plan via a pasted plan key. MiniMax, Alibaba Cloud Bailian, and OpenRouter were integrated and then dropped again because DeepSeek Harness already ships them as built-in API-key routes on its Models page. Model lists and reasoning levels stay fully dynamic from each account's catalog.
+The subscription hub now covers three browser-authorized subscriptions: OpenAI / ChatGPT (hardened end to end, image generation), xAI / Grok (catalog-driven wire protocol and per-model reasoning levels), and GitHub Copilot (device-code sign-in with the account's live model catalog). Model lists and reasoning levels stay fully dynamic from each account's catalog.
 
 ### Added
 
@@ -12,10 +12,6 @@ The subscription hub now covers more providers end to end: xAI / Grok (already s
 - `0c3360c` `feat(subhub)`: xAI Grok subscription card and live model catalog in the subscriptions hub.
 - `6233450` `feat(subhub)`: Per-model reasoning levels driven by the account catalog.
 - `7ce365c` `feat(subhub)`: GitHub Copilot subscription provider with device-code sign-in.
-- `abed63b` `feat(subhub)`: Claude subscription provider with loopback OAuth sign-in.
-- `10cf45b` `feat(subhub)`: Gemini subscription provider with loopback OAuth and token refresh.
-- `a5c69fc` `feat(subhub)`: Kimi Code subscription provider.
-- `5c44d0c` `feat(subhub)`: Volcengine Ark Coding Plan provider with a pasted plan key.
 
 ### Fixed
 
@@ -42,7 +38,7 @@ The subscription hub now covers more providers end to end: xAI / Grok (already s
 - `4cb7a2b` `docs(subhub)`: Integration rules codified for all future subscription providers.
 - `f05f4b2` `docs(subhub)`: xAI integration lessons distilled into provider guidelines.
 - `2da74d2` `docs(subhub)`: Push-protection rule for OAuth secrets recorded.
-- `9f8293b` `refactor(subhub)`: Providers already built into the harness dropped (MiniMax, Bailian, OpenRouter).
+- `9f8293b` `refactor(subhub)`: Plan-key providers already built into the harness dropped from the plugin.
 
 ## [v1.0.0] - 2026-08-16
 
