@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hero-zh.svg" width="100%" alt="dsh-plugin-subhub — 在 DeepSeek Harness 中使用第三方订阅账户" />
+  <img src="assets/hero-zh-v2.svg" width="100%" alt="dsh-plugin-subhub — 在 DeepSeek Harness 中使用第三方订阅账户" />
 </p>
 
 <h1 align="center">Dsh Plugin Subhub</h1>
